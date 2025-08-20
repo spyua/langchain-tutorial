@@ -151,3 +151,30 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# VitePress
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+
+# Package managers
+package-lock.json.tmp
+yarn.lock.tmp
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
