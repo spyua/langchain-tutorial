@@ -72,7 +72,7 @@ flowchart TD
 | **結構化輸出** | 容易驗證（完整 JSON/SQL）   | 困難：需做增量驗證或最後再解析                    |
 | **工程複雜度** | 低                   | 中～高（事件處理、取消、重試、緩衝）                 |
 | **常見場景**  | 批次分析、報表、程式碼生成       | 聊天 UI、即時客服、RAG、語音/視訊互動             |
-| **主要挑戰**  | UX 差、容易超時、無法早停省費    | 需處理「半成品」、事件流順序、觀測性與安全性             |
+| **主要挑戰**  | 延遲感高、可能超時、無法中途取消    | 需處理「半成品」、事件流順序、觀測性與安全性             |
 
 ---
 
@@ -256,7 +256,43 @@ cancel_thread.join()
 
 ## 6️⃣ 工程實務考量
 
-### 1. 通訊協定差異
+### 1. 成本控制與早停機制
+
+```python
+class CostAwareStreaming:
+    def __init__(self, max_tokens: int = 4000):
+        self.max_tokens = max_tokens
+        self.current_tokens = 0
+        self.cost_per_token = 0.0001  # 例如 GPT-4o-mini 價格
+    
+    def stream_with_cost_control(self, chat, messages):
+        """帶成本控制的串流"""
+        self.current_tokens = 0
+        
+        for chunk in chat.stream(messages):
+            if chunk.content:
+                # 估算 token 數量
+                estimated_tokens = len(chunk.content.split()) * 1.3
+                self.current_tokens += estimated_tokens
+                
+                # 檢查是否超過預算
+                if self.current_tokens > self.max_tokens:
+                    print(f"\n⚠️ 達到 token 限制 ({self.max_tokens})，自動停止")
+                    break
+                
+                print(chunk.content, end="", flush=True)
+        
+        # 計算成本
+        estimated_cost = self.current_tokens * self.cost_per_token
+        print(f"\n💰 預估成本: ${estimated_cost:.4f}")
+```
+
+**重點：**
+- ✅ **智能停止**：支援「停止生成」按鈕，立即中斷串流節省成本
+- ✅ **Token 限制**：設置最大 token 數避免意外超長回應
+- ✅ **實時監控**：追蹤累計 token 使用量和預估成本
+
+### 2. 通訊協定差異
 
 ```python
 # SSE (Server-Sent Events) 範例 - 適用於 OpenAI, Anthropic
@@ -306,7 +342,7 @@ class WebSocketHandler:
                     yield data.get('text', '')
 ```
 
-### 2. 結構化輸出處理
+### 3. 結構化輸出處理
 
 ```python
 import json
@@ -368,7 +404,7 @@ for chunk in chat.stream("請以JSON格式回傳用戶資料：姓名、年齡�
             print(chunk.content, end="", flush=True)
 ```
 
-### 3. 錯誤處理與重試
+### 4. 錯誤處理與重試機制（避免副作用）
 
 ```python
 import asyncio
@@ -414,7 +450,39 @@ async def main():
 # asyncio.run(main())
 ```
 
-### 4. 安全與內容過濾
+⚠️ **重要提醒：避免重試副作用**
+```python
+# ❌ 錯誤：重試可能導致重複操作
+async def bad_retry_example(user_action):
+    # 這種重試可能導致重複寫入資料庫或重複發送郵件
+    for attempt in range(3):
+        try:
+            result = await process_user_action(user_action)  # 可能有副作用
+            await save_to_database(result)  # 重複寫入！
+            await send_email(result)  # 重複發送！
+            return result
+        except Exception:
+            continue  # 危險的重試
+
+# ✅ 正確：分離純函數和副作用操作
+async def safe_retry_example(user_input):
+    # 1. 先重試純函數部分（串流生成）
+    generated_content = None
+    for attempt in range(3):
+        try:
+            generated_content = await generate_stream_content(user_input)
+            break
+        except Exception as e:
+            if attempt == 2:
+                raise e
+    
+    # 2. 成功後才執行副作用操作（只執行一次）
+    if generated_content:
+        await save_to_database(generated_content)  # 只執行一次
+        await send_email(generated_content)  # 只執行一次
+```
+
+### 5. 安全與內容過濾
 
 ```python
 import re
@@ -422,11 +490,15 @@ from typing import List, Set
 
 class StreamContentFilter:
     def __init__(self):
-        # 敏感詞彙清單（實際使用時應該更完善）
+        # ⚠️ 示範用敏感詞彙清單（生產環境需依照實際場景建立完整的合規名單）
         self.blocked_words: Set[str] = {
             "密碼", "token", "api_key", "secret", 
             "信用卡", "身分證", "手機號碼"
         }
+        # 實際應用建議：
+        # 1. 使用專業的 DLP (Data Loss Prevention) 服務
+        # 2. 根據行業規範（如 GDPR、HIPAA）建立合規詞庫
+        # 3. 定期更新和審核敏感詞彙清單
         self.buffer_window = 50  # 緩衝視窗大小
         self.content_buffer = ""
     
@@ -448,10 +520,14 @@ class StreamContentFilter:
         return chunk
     
     def validate_chunk_safety(self, chunk: str) -> bool:
-        """驗證chunk是否安全"""
-        # 檢查是否包含可能的程式碼注入
+        """驗證chunk是否安全（僅為示範，生產環境需要更強大的機制）"""
+        # ⚠️ 注意：簡單的 Regex 檢查容易繞過，生產環境建議：
+        # 1. 使用專業的代碼安全掃描工具
+        # 2. 實施 runtime sandbox 隔離執行環境  
+        # 3. 採用 Content Security Policy (CSP) 等瀏覽器安全機制
+        
         dangerous_patterns = [
-            r'eval\s*\(',
+            r'eval\s*\(',     # 基本示範，實際場景需要更完整的模式
             r'exec\s*\(',
             r'__import__\s*\(',
             r'<script\s*>',
@@ -479,7 +555,7 @@ for chunk in chat.stream("請解釋如何安全地處理用戶密碼"):
         print(filtered_content, end="", flush=True)
 ```
 
-### 5. 觀測性與監控
+### 6. 觀測性與監控
 
 ```python
 import time
@@ -614,6 +690,9 @@ finally:
 #### 聊天介面串流
 
 ```python
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, AIMessage
+
 class ChatInterface:
     def __init__(self):
         self.chat = ChatOpenAI(model="gpt-4o-mini")
@@ -661,7 +740,7 @@ class RAGStreamingSystem:
         print(f"🔍 正在搜尋相關文檔...")
         
         # 檢索相關文檔
-        docs = self.retriever.retrieve(question)
+        docs = self.retriever.invoke(question)
         context = "\n".join([doc.page_content for doc in docs[:3]])
         
         print(f"📚 找到 {len(docs)} 個相關文檔")
@@ -692,6 +771,46 @@ class RAGStreamingSystem:
         print("\n📖 參考文檔:")
         for i, doc in enumerate(docs[:3], 1):
             print(f"  {i}. {doc.metadata.get('title', '未知文檔')}")
+
+# 進階 RAG：使用 astream_events 同時串流檢索與生成
+class AdvancedRAGStreaming:
+    def __init__(self):
+        self.chat = ChatOpenAI(model="gpt-4o-mini")
+        self.retriever = self._setup_retriever()
+    
+    async def advanced_rag_stream(self, question: str):
+        """使用 astream_events 的進階 RAG 串流"""
+        from langchain_core.runnables import RunnableLambda
+        
+        # 建立 RAG 鏈
+        rag_chain = (
+            RunnableLambda(lambda x: self.retriever.invoke(x["question"])) |
+            RunnableLambda(self._format_context) |
+            self.chat
+        )
+        
+        print(f"🔍 開始 RAG 串流處理...")
+        
+        # 使用 astream_events 獲得詳細的執行事件
+        async for event in rag_chain.astream_events(
+            {"question": question}, 
+            version="v1"
+        ):
+            if event["event"] == "on_retriever_end":
+                docs = event["data"]["output"]
+                print(f"📚 檢索完成，找到 {len(docs)} 個文檔")
+                
+            elif event["event"] == "on_chat_model_stream":
+                chunk = event["data"]["chunk"]
+                if chunk.content:
+                    print(chunk.content, end="", flush=True)
+        
+        print("\n✅ RAG 串流完成")
+    
+    def _format_context(self, docs):
+        """格式化檢索到的文檔"""
+        context = "\n".join([doc.page_content for doc in docs[:3]])
+        return f"基於以下文檔內容回答問題：\n{context}\n\n問題："
 ```
 
 ---
@@ -706,8 +825,8 @@ class RAGStreamingSystem:
 | **工具呼叫串流** | ✅ 支援增量工具呼叫 | ✅ 支援工具使用串流 | ✅ 支援函數呼叫串流 |
 | **多模態串流** | ❌ 文字模型不支援 | ❌ 文字模型不支援 | ✅ 支援影像+文字串流 |
 | **語音串流** | ❌ 需要另外的 Whisper API | ❌ 需要第三方整合 | ✅ Gemini Live API 支援 |
-| **最大內容長度** | 128K tokens (GPT-4) | 200K tokens (Claude-3) | 1M tokens (Gemini-1.5) |
-| **延遲表現** | 中等 (~200-500ms TTFT) | 低 (~150-300ms TTFT) | 低 (~100-200ms TTFT) |
+| **最大內容長度** | 128K tokens (GPT-4) | 200K tokens (Claude-3) | 1M tokens (Gemini-1.5 Pro/Flash) |
+| **延遲表現** | 中等延遲 | 相對低延遲 | 相對最低延遲 |
 | **成本計算** | 按實際生成 tokens 計費 | 按實際生成 tokens 計費 | 按實際生成 tokens 計費 |
 | **取消支援** | ✅ 關閉 SSE 連線即可 | ✅ 關閉 SSE 連線即可 | ✅ 關閉連線即可 |
 | **錯誤處理** | HTTP 狀態碼 + 錯誤事件 | HTTP 狀態碼 + 錯誤事件 | gRPC 狀態碼 + 錯誤回調 |
@@ -722,8 +841,9 @@ from langchain_openai import ChatOpenAI
 # OpenAI 配置
 openai_chat = ChatOpenAI(
     model="gpt-4o-mini",
-    temperature=0.7,
-    streaming=True  # 啟用串流
+    temperature=0.7
+    # 注意：LangChain v0.2+ 不再需要 streaming=True 參數
+    # .stream() 方法會自動處理串流
 )
 
 print("🟢 OpenAI 串流：", end="")
@@ -796,9 +916,9 @@ def choose_streaming_provider(use_case: str):
             "primary": "Google Gemini",
             "reason": "Gemini Live API 支援低延遲語音"
         },
-        "cost_sensitive": {
+        "long_context": {
             "primary": "Anthropic Claude",
-            "reason": "性價比較高，品質穩定"
+            "reason": "適合長上下文應用，品質穩定"
         }
     }
     
