@@ -23,7 +23,9 @@
 範例（以 LangChain v0.2+ 為例）：
 
 ```python
+# 使用 .stream() 方法進行串流呼叫
 for chunk in llm.stream("請用一句話解釋什麼是串流"):
+    # end="" 避免自動換行，flush=True 立即輸出到終端
     print(chunk, end="", flush=True)
 ```
 
@@ -83,19 +85,27 @@ flowchart TD
 #### 非串流模式
 
 ```python
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage
+# 匯入必要的類別
+from langchain_openai import ChatOpenAI  # OpenAI 聊天模型
+from langchain_core.messages import SystemMessage, HumanMessage  # 訊息類型
 
-# 建立聊天模型
-chat = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
+# 建立聊天模型實例
+chat = ChatOpenAI(
+    model="gpt-4o-mini",  # 使用 GPT-4o mini 模型（成本效益佳）
+    temperature=0.7       # 設定創意度（0-1，數值越高越有創意）
+)
 
+# 建立訊息清單
 messages = [
+    # 系統訊息：定義 AI 的角色和行為
     SystemMessage(content="你是一位專業的技術講師。"),
+    # 人類訊息：使用者的問題
     HumanMessage(content="請解釋什麼是非串流模式？")
 ]
 
-# 非串流呼叫 - 等待完整回應
+# 非串流呼叫 - 等待完整回應後一次性返回
 response = chat.invoke(messages)
+# 印出完整的回應內容
 print(response.content)
 ```
 
@@ -104,26 +114,38 @@ print(response.content)
 #### 串流模式
 
 ```python
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessageChunk
+# 匯入必要的類別
+from langchain_openai import ChatOpenAI  # OpenAI 聊天模型
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessageChunk  # 訊息類型
 
-# 建立聊天模型
-chat = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
+# 建立聊天模型實例（設定與非串流相同）
+chat = ChatOpenAI(
+    model="gpt-4o-mini",  # 使用相同的模型
+    temperature=0.7       # 相同的創意度設定
+)
 
+# 建立訊息清單
 messages = [
+    # 系統訊息：定義 AI 的角色
     SystemMessage(content="你是一位專業的技術講師。"),
+    # 人類訊息：詢問串流相關問題
     HumanMessage(content="請詳細解釋什麼是串流模式？")
 ]
 
 # 串流呼叫 - 即時顯示內容
-print("AI 回應：", end="")
-full_response = ""
+print("AI 回應：", end="")  # 印出標題，不換行
+full_response = ""           # 用於收集完整回應的變數
 
+# 使用 .stream() 方法獲得串流回應
 for chunk in chat.stream(messages):
+    # 檢查 chunk 是否為 AIMessageChunk 且包含內容
     if isinstance(chunk, AIMessageChunk) and chunk.content:
+        # 即時印出內容片段，不換行且立即刷新輸出緩衝區
         print(chunk.content, end="", flush=True)
+        # 將片段加入完整回應中
         full_response += chunk.content
 
+# 串流完成後印出統計資訊
 print(f"\n\n完整回應收集完成，共 {len(full_response)} 字元")
 ```
 
@@ -134,121 +156,151 @@ print(f"\n\n完整回應收集完成，共 {len(full_response)} 字元")
 #### 串流狀態管理
 
 ```python
-import time
-from typing import List, Optional
-from langchain_core.messages import AIMessageChunk
+import time  # 用於計算時間統計
+from typing import List, Optional  # 型別提示
+from langchain_core.messages import AIMessageChunk  # 串流訊息塊類型
 
 class StreamingHandler:
+    """串流處理器：負責管理串流狀態和統計資料"""
+    
     def __init__(self):
-        self.chunks: List[AIMessageChunk] = []
-        self.start_time: Optional[float] = None
-        self.first_token_time: Optional[float] = None
-        self.total_tokens = 0
+        # 初始化實例變數
+        self.chunks: List[AIMessageChunk] = []  # 儲存所有收到的訊息塊
+        self.start_time: Optional[float] = None  # 開始處理時間
+        self.first_token_time: Optional[float] = None  # 首個 token 回應時間
+        self.total_tokens = 0  # 總 token 計數器
     
     def process_stream(self, chat, messages):
         """處理串流回應並收集統計資料"""
+        # 記錄開始時間（用於計算總處理時間）
         self.start_time = time.time()
+        # 重置 chunks 清單（清除上次的結果）
         self.chunks = []
         
+        # 印出處理開始提示
         print("🤖 AI 開始回應：", end="")
         
+        # 遍歷串流回應的每個 chunk
         for i, chunk in enumerate(chat.stream(messages)):
+            # 檢查 chunk 是否包含有效內容
             if isinstance(chunk, AIMessageChunk) and chunk.content:
-                # 記錄首個 token 時間
+                # 記錄首個 token 的時間（TTFT 指標）
                 if self.first_token_time is None:
                     self.first_token_time = time.time()
                 
+                # 即時印出內容（提供即時回饋）
                 print(chunk.content, end="", flush=True)
+                # 將 chunk 加入收集清單
                 self.chunks.append(chunk)
+                # 增加 token 計數（簡化計算，實際應用可用更精確的方法）
                 self.total_tokens += 1
         
-        print("\n")  # 換行
-        self._print_statistics()
+        print("\n")  # 完成後換行
+        self._print_statistics()  # 印出統計資料
     
     def _print_statistics(self):
         """印出串流統計資料"""
+        # 確保有足夠的時間數據
         if self.start_time and self.first_token_time:
-            ttft = self.first_token_time - self.start_time  # Time to First Token
+            # 計算首個 token 延遲（重要的性能指標）
+            ttft = self.first_token_time - self.start_time
+            # 計算總處理時間
             total_time = time.time() - self.start_time
+            # 計算平均輸出速度（tokens/秒）
             tokens_per_second = self.total_tokens / total_time if total_time > 0 else 0
             
+            # 格式化印出統計資訊
             print(f"\n📊 串流統計：")
-            print(f"   首個 Token 延遲 (TTFT): {ttft:.2f}s")
+            print(f"   首個 Token 延遲 (TTFT): {ttft:.2f}s")  # Time to First Token
             print(f"   總回應時間: {total_time:.2f}s")
             print(f"   輸出速度: {tokens_per_second:.1f} tokens/sec")
-            print(f"   總 chunks: {len(self.chunks)}")
+            print(f"   總 chunks: {len(self.chunks)}")  # 收到的訊息塊數量
     
     def get_full_response(self) -> str:
         """組合完整回應"""
+        # 將所有有內容的 chunks 組合成完整字串
         return "".join(chunk.content for chunk in self.chunks if chunk.content)
 
 # 使用範例
-handler = StreamingHandler()
-handler.process_stream(chat, messages)
-full_text = handler.get_full_response()
+handler = StreamingHandler()  # 建立處理器實例
+handler.process_stream(chat, messages)  # 處理串流
+full_text = handler.get_full_response()  # 獲得完整回應文字
 ```
 
 #### 串流取消機制
 
 ```python
-import threading
-import time
-from typing import Iterator
-from langchain_core.messages import AIMessageChunk
+import threading  # 用於執行緒安全操作
+import time  # 用於時間延遲和計算
+from typing import Iterator  # 型別提示
+from langchain_core.messages import AIMessageChunk  # 串流訊息塊類型
 
 class CancellableStream:
+    """可取消的串流處理器"""
+    
     def __init__(self):
+        # 取消狀態標誌（執行緒安全）
         self.cancelled = False
+        # 執行緒鎖，確保 cancelled 狀態的安全存取
         self._lock = threading.Lock()
     
     def cancel(self):
-        """取消串流"""
+        """取消串流（可從其他執行緒呼叫）"""
+        # 使用鎖確保執行緒安全
         with self._lock:
-            self.cancelled = True
+            self.cancelled = True  # 設定取消標誌
             print("\n⚠️ 串流已被使用者取消")
     
     def stream_with_cancellation(self, chat, messages, max_chunks: int = 100):
         """支援取消的串流處理"""
-        chunk_count = 0
+        chunk_count = 0  # 處理的 chunks 計數器
         
         try:
+            # 開始串流處理
             for chunk in chat.stream(messages):
-                # 檢查是否被取消
+                # 執行緒安全地檢查取消狀態
                 with self._lock:
                     if self.cancelled:
                         print("\n🛑 串流取消完成")
-                        break
+                        break  # 立即退出迴圈
                 
+                # 處理有內容的訊息塊
                 if isinstance(chunk, AIMessageChunk) and chunk.content:
+                    # 即時顯示內容
                     print(chunk.content, end="", flush=True)
-                    chunk_count += 1
+                    chunk_count += 1  # 增加計數
                     
-                    # 模擬長回應的分段處理
-                    time.sleep(0.05)  # 模擬網路延遲
+                    # 模擬網路延遲（實際環境中不需要）
+                    time.sleep(0.05)
                     
-                    # 安全機制：避免無限長的回應
+                    # 安全機制：防止無限長的回應消耗資源
                     if chunk_count >= max_chunks:
                         print(f"\n⚠️ 達到最大 chunks 限制 ({max_chunks})，自動停止")
                         break
                         
         except Exception as e:
+            # 處理串流過程中的例外情況
             print(f"\n❌ 串流過程發生錯誤: {e}")
         
+        # 印出處理結果統計
         print(f"\n✅ 串流完成，共處理 {chunk_count} chunks")
 
 # 使用範例
-cancellable_stream = CancellableStream()
+cancellable_stream = CancellableStream()  # 建立可取消的串流實例
 
 # 在另一個線程中模擬使用者取消操作
 def simulate_user_cancel():
-    time.sleep(2)  # 2秒後取消
-    cancellable_stream.cancel()
+    """模擬使用者在 2 秒後按下取消按鈕"""
+    time.sleep(2)  # 等待 2 秒
+    cancellable_stream.cancel()  # 呼叫取消方法
 
+# 建立並啟動取消模擬執行緒
 cancel_thread = threading.Thread(target=simulate_user_cancel)
-cancel_thread.start()
+cancel_thread.start()  # 啟動背景執行緒
 
-# 開始串流
+# 開始串流處理（主執行緒）
 cancellable_stream.stream_with_cancellation(chat, messages)
+# 等待取消執行緒完成
 cancel_thread.join()
 ```
 
@@ -260,31 +312,42 @@ cancel_thread.join()
 
 ```python
 class CostAwareStreaming:
+    """具備成本控制功能的串流處理器"""
+    
     def __init__(self, max_tokens: int = 4000):
+        # 設定最大允許的 token 數量
         self.max_tokens = max_tokens
+        # 當前累計的 token 數量
         self.current_tokens = 0
-        self.cost_per_token = 0.0001  # 例如 GPT-4o-mini 價格
+        # 每個 token 的成本（以 GPT-4o-mini 為例）
+        self.cost_per_token = 0.0001  
     
     def stream_with_cost_control(self, chat, messages):
-        """帶成本控制的串流"""
+        """帶成本控制的串流處理"""
+        # 重置當前 token 計數器
         self.current_tokens = 0
         
+        # 遍歷串流回應
         for chunk in chat.stream(messages):
             if chunk.content:
-                # 估算 token 數量
+                # 估算當前 chunk 的 token 數量
+                # 簡化算法：英文單字數 * 1.3（考慮標點符號和編碼）
                 estimated_tokens = len(chunk.content.split()) * 1.3
+                # 累計 token 數量
                 self.current_tokens += estimated_tokens
                 
-                # 檢查是否超過預算
+                # 檢查是否超過預算限制
                 if self.current_tokens > self.max_tokens:
                     print(f"\n⚠️ 達到 token 限制 ({self.max_tokens})，自動停止")
-                    break
+                    break  # 立即停止串流，節省成本
                 
+                # 如果未超過限制，正常顯示內容
                 print(chunk.content, end="", flush=True)
         
-        # 計算成本
+        # 計算並顯示預估成本
         estimated_cost = self.current_tokens * self.cost_per_token
         print(f"\n💰 預估成本: ${estimated_cost:.4f}")
+        print(f"📊 使用 tokens: {self.current_tokens:.0f}/{self.max_tokens}")
 ```
 
 **重點：**
@@ -297,47 +360,67 @@ class CostAwareStreaming:
 ```python
 # SSE (Server-Sent Events) 範例 - 適用於 OpenAI, Anthropic
 class SSEHandler:
+    """Server-Sent Events 串流處理器"""
+    
     def __init__(self):
+        # 儲存事件源連線的參考
         self.event_source = None
     
     def handle_sse_stream(self, url: str, headers: dict):
-        """處理 SSE 串流"""
-        import sseclient  # pip install sseclient-py
+        """處理 SSE 串流連線"""
+        import sseclient  # 需要安裝：pip install sseclient-py
+        import requests   # 用於 HTTP 請求
+        import json       # 用於解析 JSON 資料
         
+        # 建立串流 HTTP 請求
         response = requests.get(url, headers=headers, stream=True)
+        # 建立 SSE 客戶端
         client = sseclient.SSEClient(response)
         
+        # 處理每個 SSE 事件
         for event in client.events():
+            # 檢查是否為結束標記
             if event.data != '[DONE]':
                 try:
+                    # 解析 JSON 格式的事件資料
                     data = json.loads(event.data)
+                    # 提取內容片段
                     chunk_content = data['choices'][0]['delta'].get('content', '')
+                    # 如果有內容則產出
                     if chunk_content:
                         yield chunk_content
                 except json.JSONDecodeError:
+                    # 忽略無效的 JSON 資料
                     continue
 
 # WebSocket 範例 - 適用於 Gemini Live API
 class WebSocketHandler:
+    """WebSocket 串流處理器（適用於低延遲場景）"""
+    
     def __init__(self):
+        # 儲存 WebSocket 連線的參考
         self.ws = None
     
     async def handle_websocket_stream(self, uri: str):
-        """處理 WebSocket 串流"""
-        import websockets  # pip install websockets
+        """處理 WebSocket 串流連線"""
+        import websockets  # 需要安裝：pip install websockets
+        import json        # 用於 JSON 序列化/反序列化
         
+        # 建立 WebSocket 連線（使用 async context manager）
         async with websockets.connect(uri) as websocket:
-            self.ws = websocket
+            self.ws = websocket  # 儲存連線參考
             
-            # 發送初始訊息
+            # 發送初始訊息到服務器
             await websocket.send(json.dumps({
                 "type": "message",
                 "content": "Hello from streaming client"
             }))
             
-            # 接收串流回應
+            # 持續接收串流回應
             async for message in websocket:
+                # 解析收到的 JSON 訊息
                 data = json.loads(message)
+                # 檢查訊息類型並提取內容
                 if data.get('type') == 'content':
                     yield data.get('text', '')
 ```
@@ -690,40 +773,56 @@ finally:
 #### 聊天介面串流
 
 ```python
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, AIMessage
+# 匯入必要的模組
+from langchain_openai import ChatOpenAI  # OpenAI 聊天模型
+from langchain_core.messages import HumanMessage, AIMessage  # 訊息類型
 
 class ChatInterface:
+    """串流聊天介面：支援多輪對話的聊天機器人"""
+    
     def __init__(self):
+        # 初始化聊天模型
         self.chat = ChatOpenAI(model="gpt-4o-mini")
+        # 儲存完整的對話歷史（包含所有對話輪次）
         self.conversation_history = []
     
     def stream_chat_response(self, user_message: str):
-        """串流聊天回應"""
-        # 加入用戶訊息到歷史
+        """處理用戶訊息並串流 AI 回應"""
+        # 將新的用戶訊息加入對話歷史
         self.conversation_history.append(
-            HumanMessage(content=user_message)
+            HumanMessage(content=user_message)  # 建立人類訊息物件
         )
         
+        # 顯示用戶輸入
         print(f"👤 用戶: {user_message}")
-        print("🤖 AI: ", end="")
+        print("🤖 AI: ", end="")  # AI 回應標籤，不換行
         
-        # 串流 AI 回應
+        # 用於收集完整 AI 回應的變數
         ai_response = ""
+        
+        # 串流處理 AI 回應（傳入完整對話歷史）
         for chunk in self.chat.stream(self.conversation_history):
-            if chunk.content:
+            if chunk.content:  # 檢查 chunk 是否包含內容
+                # 即時顯示內容片段
                 print(chunk.content, end="", flush=True)
+                # 累積完整回應
                 ai_response += chunk.content
         
-        # 加入 AI 回應到歷史
+        # 將完整的 AI 回應加入對話歷史
         self.conversation_history.append(
-            AIMessage(content=ai_response)
+            AIMessage(content=ai_response)  # 建立 AI 訊息物件
         )
+        
+        # 印出分隔線，便於閱讀
         print("\n" + "─" * 50)
 
-# 使用聊天介面
-chat_ui = ChatInterface()
+# 使用範例：建立聊天介面並進行多輪對話
+chat_ui = ChatInterface()  # 建立聊天介面實例
+
+# 第一輪對話
 chat_ui.stream_chat_response("你好，請介紹一下 Python")
+
+# 第二輪對話（AI 會記得前面的對話）
 chat_ui.stream_chat_response("能給我一個簡單的程式範例嗎？")
 ```
 
@@ -836,57 +935,65 @@ class AdvancedRAGStreaming:
 #### OpenAI 串流
 
 ```python
+# 匯入 OpenAI 聊天模型類別
 from langchain_openai import ChatOpenAI
 
-# OpenAI 配置
+# OpenAI 模型配置
 openai_chat = ChatOpenAI(
-    model="gpt-4o-mini",
-    temperature=0.7
+    model="gpt-4o-mini",  # 使用成本效益高的 mini 版本
+    temperature=0.7       # 設定創意度
     # 注意：LangChain v0.2+ 不再需要 streaming=True 參數
     # .stream() 方法會自動處理串流
 )
 
+# 執行串流查詢
 print("🟢 OpenAI 串流：", end="")
 for chunk in openai_chat.stream("請說明 OpenAI 的技術特色"):
-    if chunk.content:
-        print(chunk.content, end="", flush=True)
-print("\n")
+    if chunk.content:  # 檢查內容是否存在
+        print(chunk.content, end="", flush=True)  # 即時顯示
+print("\n")  # 完成後換行
 ```
 
 #### Anthropic Claude 串流
 
 ```python
+# 匯入 Anthropic Claude 聊天模型類別
 from langchain_anthropic import ChatAnthropic
 
-# Claude 配置
+# Claude 模型配置
 claude_chat = ChatAnthropic(
-    model="claude-3-sonnet-20240229",
-    temperature=0.7
+    model="claude-3-sonnet-20240229",  # 使用 Claude-3 Sonnet 模型
+    temperature=0.7                    # 設定創意度
+    # Claude 現已原生支援 system prompts 和串流
 )
 
+# 執行串流查詢
 print("🟡 Claude 串流：", end="")
 for chunk in claude_chat.stream("請說明 Anthropic Claude 的技術特色"):
-    if chunk.content:
-        print(chunk.content, end="", flush=True)
-print("\n")
+    if chunk.content:  # 檢查內容是否存在
+        print(chunk.content, end="", flush=True)  # 即時顯示
+print("\n")  # 完成後換行
 ```
 
 #### Google Gemini 串流
 
 ```python
+# 匯入 Google Gemini 聊天模型類別
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-# Gemini 配置
+# Gemini 模型配置
 gemini_chat = ChatGoogleGenerativeAI(
-    model="gemini-pro",
-    temperature=0.7
+    model="gemini-pro",  # 使用 Gemini Pro 模型
+    temperature=0.7      # 設定創意度
+    # Gemini 支援多模態和長上下文（1.5 版本可達 1M tokens）
 )
 
+# 執行串流查詢
 print("🔵 Gemini 串流：", end="")
 for chunk in gemini_chat.stream("請說明 Google Gemini 的技術特色"):
-    if chunk.content:
-        print(chunk.content, end="", flush=True)
-print("\n")
+    if chunk.content:  # 檢查內容是否存在
+        print(chunk.content, end="", flush=True)  # 即時顯示
+print("\n")  # 完成後換行
 ```
 
 ### 供應商選擇建議
@@ -895,6 +1002,7 @@ print("\n")
 def choose_streaming_provider(use_case: str):
     """根據使用場景選擇最適合的供應商"""
     
+    # 定義不同使用場景的供應商建議
     recommendations = {
         "general_chat": {
             "primary": "OpenAI",
@@ -916,21 +1024,22 @@ def choose_streaming_provider(use_case: str):
             "primary": "Google Gemini",
             "reason": "Gemini Live API 支援低延遲語音"
         },
-        "long_context": {
+        "quality_focus": {
             "primary": "Anthropic Claude",
             "reason": "適合長上下文應用，品質穩定"
         }
     }
     
+    # 根據使用場景返回建議，如果找不到則返回預設選項
     return recommendations.get(use_case, {
         "primary": "OpenAI",
         "reason": "通用選擇，適合大多數場景"
     })
 
-# 使用範例
+# 使用範例：查詢低延遲場景的建議
 recommendation = choose_streaming_provider("low_latency")
-print(f"建議供應商: {recommendation['primary']}")
-print(f"理由: {recommendation['reason']}")
+print(f"建議供應商: {recommendation['primary']}")  # 印出建議的供應商
+print(f"理由: {recommendation['reason']}")         # 印出選擇理由
 ```
 
 ---
