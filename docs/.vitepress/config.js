@@ -27,6 +27,7 @@ export default withMermaid(
             text: '基礎教學',
             items: [
               { text: 'LangChain 介紹', link: '/tutorials/introduction' },
+              { text: 'LangChain 架構與核心概念', link: '/tutorials/architecture' },
               { text: '環境設置', link: '/tutorials/setup' },
               { text: '免費 LLM 模型指南', link: '/tutorials/free-llm-models' },
               { text: '第一個應用', link: '/tutorials/first-app' }

@@ -49,25 +49,45 @@ LangChain 是一個多功能的框架，可以用來建立利用大型語言模�
 
 ::: details 點擊查看：檢索增強生成 (RAG) 實作
 ```python
-from langchain.chains import RetrievalQA
-from langchain.vectorstores import Chroma
-from langchain.document_loaders import PyPDFLoader
+from langchain.chains.retrieval import create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_chroma import Chroma
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.prompts import ChatPromptTemplate
+
+# pip install -U langchain langchain-openai langchain-community langchain-chroma pypdf
 
 # 載入外部文件
 loader = PyPDFLoader("company_handbook.pdf")
 documents = loader.load()
 
-# 建立向量資料庫
-vectorstore = Chroma.from_documents(documents, embeddings)
-
-# 讓 LLM 感知外部資料
-qa_chain = RetrievalQA.from_chain_type(
-    llm=llm,
-    retriever=vectorstore.as_retriever()
+# 切分文件
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1000, 
+    chunk_overlap=150
 )
+splits = splitter.split_documents(documents)
+
+# 建立向量資料庫（需要先定義 embeddings）
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+embeddings = OpenAIEmbeddings()
+vectorstore = Chroma.from_documents(splits, embeddings)
+retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+
+# 建立文件整合鏈
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+prompt = ChatPromptTemplate.from_template(
+    "根據以下文件回覆：{context}\n問題：{input}"
+)
+stuff_chain = create_stuff_documents_chain(llm, prompt)
+
+# 建立檢索增強生成鏈（新版 v0.2+ 做法）
+rag_chain = create_retrieval_chain(retriever, stuff_chain)
 
 # LLM 現在能回答文件中的內容
-response = qa_chain.invoke("公司的請假政策是什麼？")
+response = rag_chain.invoke({"input": "公司的請假政策是什麼？"})
+print(response["answer"])
 ```
 :::
 
@@ -79,8 +99,12 @@ from datetime import datetime
 # 感知當前時間資料
 current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
+# 模擬數據函數（實際應用中需要實作）
+def get_latest_market_data():
+    return {"stock_price": 150.25, "volume": 1000000, "trend": "up"}
+
 prompt = PromptTemplate.from_template(
-    "現在時間是 {current_time}，根據當前時間和歷史資料 {historical_data} 來分析趋勢"
+    "現在時間是 {current_time}，根據當前時間和歷史資料 {historical_data} 來分析趨勢"
 )
 
 # LLM 能感知實時資料
@@ -93,26 +117,28 @@ formatted_prompt = prompt.format(
 
 ::: details 點擊查看：多源資料整合實作
 ```python
-from langchain.agents import create_sql_agent
-from langchain.sql_database import SQLDatabase
+from langchain_community.agent_toolkits import create_sql_agent
+from langchain_community.utilities import SQLDatabase
+from langchain_openai import ChatOpenAI
 
 # 讓 LLM 感知資料庫
 db = SQLDatabase.from_uri("sqlite:///sales.db")
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
-# LLM 能查詢資料庫並整合結果
+# LLM 能查詢資料庫並整合結果（新版 invoke 格式）
 sql_agent = create_sql_agent(llm, db, verbose=True)
-response = sql_agent.invoke("分析本月銷售趨勢並與去年同期比較")
+response = sql_agent.invoke({"input": "分析本月銷售趨勢並與去年同期比較"})
+print(response["output"])
+
+# 🔒 安全機制說明：
+# 1. 輸入驗證：所有工具都應進行參數驗證
+# 2. 權限控制：限制 Agent 能訪問的資源範圍
+# 3. 超時設定：防止長時間執行造成資源消耗
+# 4. 稽核機制：重要操作先由人類確認
+# 5. 日誌記錄：記錄所有 Agent 操作供稽核
 ```
 :::
 
-#### 資料感知的層級
-
-| 層級 | 能力 | 實例 |
-|------|------|------|
-| **靜態感知** | 預先載入的知識庫 | PDF 文件問答、FAQ 系統 |
-| **動態感知** | 實時資料檢索 | 股價查詢、天氣資訊 |
-| **上下文感知** | 對話歷史記憶 | 客服機器人、個人助理 |
-| **環境感知** | 感知外部系統狀態 | IoT 數據分析、系統監控 |
 
 ### 🤖 增強行動力（Enhance Agency）
 
@@ -147,7 +173,7 @@ response = sql_agent.invoke("分析本月銷售趨勢並與去年同期比較")
   3. 🎫 自動生成退貨單並發送
 
 **場景三：智能監控系統**
-- **系統告警**：「服務器 CPU 使用率 90%」
+- **系統告警**：「伺服器 CPU 使用率 90%」
 - **AI 行動**：
   1. 📊 分析歷史性能數據
   2. ⚖️ 自動調整負載平衡
@@ -186,121 +212,272 @@ response = sql_agent.invoke("分析本月銷售趨勢並與去年同期比較")
 ```python
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain.tools import Tool
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+import ast
+import operator
 
-# 定義工具集
+# 安全計算器（只允許基本數學運算）
+def safe_calculate(expression: str):
+    """安全的數學計算器，避免使用 eval()"""
+    allowed_operators = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.Pow: operator.pow,
+        ast.USub: operator.neg
+    }
+    
+    def _eval(node):
+        if isinstance(node, ast.Constant):  # Python 3.8+
+            return node.value
+        elif isinstance(node, ast.Num):  # 向下相容
+            return node.n
+        elif isinstance(node, ast.BinOp):
+            if type(node.op) in allowed_operators:
+                return allowed_operators[type(node.op)](_eval(node.left), _eval(node.right))
+            else:
+                raise ValueError(f"不支援的運算子: {type(node.op).__name__}")
+        elif isinstance(node, ast.UnaryOp):
+            if type(node.op) in allowed_operators:
+                return allowed_operators[type(node.op)](_eval(node.operand))
+            else:
+                raise ValueError(f"不支援的一元運算子: {type(node.op).__name__}")
+        else:
+            raise ValueError(f"不支援的運算式: {type(node).__name__}")
+    
+    try:
+        node = ast.parse(expression, mode='eval')
+        return _eval(node.body)
+    except Exception as e:
+        return f"計算錯誤: {str(e)}"
+
 def search_web(query):
-    return f"搜尋結果：{query}"
-
-def calculate(expression):
-    return eval(expression)
+    """模擬網路搜尋功能"""
+    return f"搜尋結果: {query} - 相關內容已找到"
 
 def send_email(recipient, content):
-    return f"郵件已發送給 {recipient}"
+    """模擬郵件發送（Dry-run模式）"""
+    return f"[乾執行] 郵件將發送給 {recipient}: {content[:50]}..."
 
+# 安全的工具集
 tools = [
     Tool(name="搜尋", func=search_web, description="搜尋網路資訊"),
-    Tool(name="計算", func=calculate, description="數學計算"),
-    Tool(name="發送郵件", func=send_email, description="發送電子郵件")
+    Tool(name="安全計算", func=safe_calculate, description="安全的數學計算（只允許 +, -, *, /, ** 運算）"),
+    Tool(name="模擬發送郵件", func=send_email, description="模擬發送電子郵件（測試模式）")
 ]
 
-# LLM 能自主決定使用哪個工具
-agent = create_tool_calling_agent(llm, tools)
-agent_executor = AgentExecutor(agent=agent, tools=tools)
+# ❗️ 重要：工具調用相容性說明
+# Tool Calling 需要支援此功能的模型：
+# ✅ 支援：GPT-4, GPT-4o, Claude-3, Gemini Pro
+# ❌ 不支援：部分開源模型、GPT-3.5-turbo 舊版本
+# 若模型不支援 Tool Calling，將降級為一般文字生成
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
-# 複雜任務自主分解與執行
-response = agent_executor.invoke(
-    "幫我搜尋最新的AI發展趨勢，計算相關市場規模，然後發送總結報告給經理"
-)
+# 建立 prompt 模板
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "你是一個有用的助手。使用提供的工具來完成任務。"),
+    ("user", "{input}"),
+    ("assistant", "{agent_scratchpad}"),
+])
+
+# LLM 能自主決定使用哪個工具
+agent = create_tool_calling_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+
+# 複雜任務自主分解與執行（正確的 invoke 格式）
+response = agent_executor.invoke({
+    "input": "幫我搜尋最新的AI發展趨勢，計算 (100+50)*2 的結果，然後模擬發送總結報告給經理"
+})
+print(response["output"])
+
+# 🔒 安全機制說明：
+# 1. 輸入驗證：所有工具都應進行參數驗證
+# 2. 權限控制：限制 Agent 能訪問的資源範圍
+# 3. 超時設定：防止長時間執行造成資源消耗
+# 4. 稽核機制：重要操作先由人類確認
+# 5. 日誌記錄：記錄所有 Agent 操作供稽核
 ```
 :::
 
 ::: details 點擊查看：多步驟推理決策實作
 ```python
-from langchain.agents import initialize_agent, AgentType
+from langchain.agents import create_react_agent, AgentExecutor
+from langchain import hub
+from langchain_openai import ChatOpenAI
 
-# ReAct 代理：推理-行動-觀察循環
-agent = initialize_agent(
-    tools=tools,
-    llm=llm,
-    agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-    verbose=True
+# ReAct 代理：推理-行動-觀察循環（新版 v0.2+ 做法）
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+# 使用官方 ReAct prompt 模板
+prompt = hub.pull("hwchase17/react")
+
+# 建立 ReAct agent
+agent = create_react_agent(llm=llm, tools=tools, prompt=prompt)
+agent_executor = AgentExecutor(
+    agent=agent, 
+    tools=tools, 
+    verbose=True,
+    handle_parsing_errors=True,  # 處理解析錯誤
+    max_iterations=5  # 限制最大迭代次數
 )
 
-# LLM 會自主進行多輪推理
-result = agent.invoke(
-    "我需要為新產品制定行銷策略。請分析競爭對手、市場趨勢，並提出建議。"
-)
+# LLM 會自主進行多輪推理（正確的 invoke 格式）
+result = agent_executor.invoke({
+    "input": "我需要為新產品制定行銷策略。請搜尋競爭對手資訊、分析市場趨勢，並提出建議。"
+})
+print(result["output"])
 ```
 :::
 
 ::: details 點擊查看：條件判斷流程控制實作
 ```python
-from langchain.agents import ConversationalAgent
+# 此範例已更新為 v0.2+ 新版做法，使用 create_react_agent
+# ConversationalAgent 已棄用，建議使用 RunnableWithMessageHistory
 
-# 對話式代理，能根據上下文調整行動
-conversational_agent = ConversationalAgent.from_llm_and_tools(
-    llm=llm,
-    tools=tools,
-    memory=memory
+# 對話式代理（新版做法：使用 RunnableWithMessageHistory）
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_community.chat_message_histories import ChatMessageHistory
+
+# 記憶儲存
+store = {}
+def get_session_history(session_id: str) -> ChatMessageHistory:
+    if session_id not in store:
+        store[session_id] = ChatMessageHistory()
+    return store[session_id]
+
+# 帶記憶的 Agent
+conversational_agent = RunnableWithMessageHistory(
+    agent_executor,
+    get_session_history,
+    input_messages_key="input",
+    history_messages_key="chat_history",
+    output_messages_key="output",
 )
 
-# LLM 能根據條件執行不同行動
+# LLM 能根據條件與歷史執行不同行動
 response = conversational_agent.invoke(
-    "如果今天股價上漲超過5%，就發送慶祝郵件；否則分析下跌原因"
+    {"input": "如果今天股價上漲超過5%，就模擬發送慶祝郵件；否則分析下跌原因"},
+    config={"configurable": {"session_id": "trading_session"}}
 )
+print(response["output"])
 ```
 :::
 
-#### 行動力的層級
-
-| 層級 | 能力 | 實例 |
-|------|------|------|
-| **反應式行動** | 根據輸入執行對應動作 | 簡單工具調用、API 呼叫 |
-| **計劃式行動** | 制定多步驟執行計劃 | 專案規劃、任務分解 |
-| **自適應行動** | 根據執行結果調整策略 | 動態優化、錯誤恢復 |
-| **創新式行動** | 創造新的解決方案 | 創意發想、問題突破 |
 
 #### 實際應用案例
 
 **智能客服系統：**
 ```python
-# 客服代理能感知客戶資料並自主決定行動
-customer_service_agent = AgentExecutor.from_agent_and_tools(
-    agent=conversational_agent,
-    tools=[
-        get_customer_info,      # 查詢客戶資料
-        check_order_status,     # 查詢訂單狀態  
-        process_refund,         # 處理退款
-        escalate_to_human       # 轉人工客服
-    ]
+# 客服代理能感知客戶資料並自主決定行動（更新為 v0.2+ 新版）
+# 首先定義客服工具
+from langchain.tools import Tool
+
+def get_customer_info(customer_id: str):
+    """查詢客戶資訊（模擬）"""
+    return f"客戶 {customer_id}: VIP會員，註冊日期 2023-01-15"
+
+def check_order_status(order_id: str):
+    """查詢訂單狀態（模擬）"""
+    return f"訂單 {order_id}: 已出貨，預計 2024-01-20 送達"
+
+def process_refund(order_id: str, reason: str):
+    """處理退款（模擬）"""
+    return f"[模擬] 訂單 {order_id} 退款申請已提交，原因: {reason}"
+
+def escalate_to_human(issue: str):
+    """轉人工客服（模擬）"""
+    return f"[模擬] 已轉交人工客服處理: {issue}"
+
+customer_tools = [
+    Tool(name="查詢客戶資訊", func=get_customer_info, description="查詢客戶基本資訊"),
+    Tool(name="查詢訂單狀態", func=check_order_status, description="查詢訂單物流狀態"),
+    Tool(name="處理退款", func=process_refund, description="處理退款申請"),
+    Tool(name="轉人工客服", func=escalate_to_human, description="複雜問題轉人工處理")
+]
+
+customer_service_agent = AgentExecutor(
+    agent=create_tool_calling_agent(llm, customer_tools, prompt),
+    tools=customer_tools,
+    verbose=True
 )
 
-# 自主處理複雜客服情境
-response = customer_service_agent.invoke(
-    "客戶抱怨商品有問題要退貨，請幫我處理"
-)
+# 自主處理複雜客服情境（正確的 invoke 格式）
+response = customer_service_agent.invoke({
+    "input": "客戶抱怨商品有問題要退貨，客戶ID是C001，訂單編號是O12345，請幫我處理"
+})
+print(response["output"])
+
+# 🔒 安全機制說明：
+# 1. 輸入驗證：所有工具都應進行參數驗證
+# 2. 權限控制：限制 Agent 能訪問的資源範圍
+# 3. 超時設定：防止長時間執行造成資源消耗
+# 4. 稽核機制：重要操作先由人類確認
+# 5. 日誌記錄：記錄所有 Agent 操作供稽核
 ```
 
 **智能分析師：**
 ```python
-# 分析代理能整合多源資料並自主產出報告
-analyst_agent = AgentExecutor.from_agent_and_tools(
-    agent=planning_agent,
-    tools=[
-        query_database,         # 查詢資料庫
-        fetch_market_data,      # 獲取市場資料
-        generate_charts,        # 生成圖表
-        create_presentation     # 製作簡報
-    ]
+# 分析代理能整合多源資料並自主產出報告（更新為 v0.2+ 新版）
+def query_database(query: str):
+    """查詢資料庫（模擬）"""
+    return f"資料庫查詢結果: {query} - 找到 150 筆記錄"
+
+def fetch_market_data(period: str):
+    """獲取市場資料（模擬）"""
+    return f"{period} 市場資料: 成長 15%, 競爭激烈度中等"
+
+def generate_charts(data_type: str):
+    """生成圖表（模擬）"""
+    return f"[模擬] {data_type} 圖表已生成，儲存至 charts/{data_type}.png"
+
+def create_presentation(content: str):
+    """製作簡報（模擬）"""
+    return f"[模擬] 簡報已生成: {content[:100]}..."
+
+analyst_tools = [
+    Tool(name="查詢資料庫", func=query_database, description="查詢內部業務資料庫"),
+    Tool(name="獲取市場資料", func=fetch_market_data, description="獲取外部市場資訊"),
+    Tool(name="生成圖表", func=generate_charts, description="生成資料視覺化圖表"),
+    Tool(name="製作簡報", func=create_presentation, description="製作分析簡報")
+]
+
+analyst_agent = AgentExecutor(
+    agent=create_tool_calling_agent(llm, analyst_tools, prompt),
+    tools=analyst_tools,
+    verbose=True
 )
 
-# 自主完成完整分析流程
-report = analyst_agent.invoke(
-    "製作本季度業績分析報告，包含趨勢分析和改善建議"
-)
+# 自主完成完整分析流程（正確的 invoke 格式）
+report = analyst_agent.invoke({
+    "input": "製作本季度業績分析報告，包含趨勢分析和改善建議"
+})
+print(report["output"])
 ```
 
-### 總結：資料感知 + 行動力 = 智能應用
+#### 🔒 安全開發原則
+
+在開發 LangChain 應用時，安全性應是第一優先考量：
+
+| 安全面向 | 具體做法 | 實作範例 |
+|------------|----------|---------|
+| **輸入驗證** | 所有工具都要檢查參數合法性 | `assert isinstance(amount, (int, float)) and amount > 0` |
+| **權限控制** | 限制 Agent 可訪問的資源範圍 | 白名單、資料庫角色分離 |
+| **超時機制** | 防止工具無限期執行 | `timeout=30` 參數設定 |
+| **人工稽核** | 重要操作需人類確認 | 轉帳、刪除數據等操作 |
+| **日誌追蹤** | 記錄所有 Agent 行為 | LangSmith 整合、本地日誌 |
+| **率限控制** | 防止 API 濫用 | 每分鐘/每小時調用次數限制 |
+
+### 📝 產業級開發建議
+
+1. **不要在生產環境使用** `eval()`、`exec()` 等危險函數
+2. **始終使用環境變數** 來儲存 API 金鑰，勿硬編碼
+3. **實作断路器模式** 讓使用者能隨時終止 Agent 運行
+4. **設計失效安全機制** 當工具失效時，應有合理的備用方案
+5. **定期安全稽核** 查看 Agent 行為記錄，發現異常行為
+
+## 總結：資料感知 + 行動力 = 智能應用
 
 **傳統 LLM：** 只能根據訓練資料回答問題
 **LangChain 增強後：** 
@@ -310,331 +487,25 @@ report = analyst_agent.invoke(
 
 這就是 LangChain 讓 LLM 從「聊天機器人」進化成「智能助手」的關鍵所在。
 
-## LangChain 架構概覽
-
-LangChain 框架提供了一系列模組化的抽象化功能（modular abstractions），這些是與 LLM 一起工作所必需的，同時也提供了廣泛的實作版本，方便開發者應用。
-
-```mermaid
-graph TB
-    subgraph "LangChain 核心架構"
-        LLM[LLM Models<br/>大型語言模型接入]
-        
-        subgraph "輸入處理"
-            Prompts[Prompts<br/>提示詞管理]
-            DocLoad[Document Loaders<br/>文件載入工具]
-        end
-        
-        subgraph "核心功能"
-            Retrieval[Retrieval<br/>檢索模組]
-            Memory[Memory<br/>記憶模組]
-            Chains[Chains<br/>鏈式流程]
-            Agents[Agents<br/>智能代理]
-        end
-        
-        Prompts --> LLM
-        DocLoad --> Retrieval
-        Retrieval --> Chains
-        Memory --> Chains
-        Chains --> Agents
-        LLM --> Agents
-    end
-```
-
-### 主要模組說明
-
-| 模組 | 功能說明 | 實際用途 |
-|------|----------|----------|
-| **LLM Models** | 大型語言模型的接入介面 | 支援 OpenAI GPT、Anthropic Claude、本地模型等 |
-| **Prompts** | 提示詞管理 | 定義、組裝與優化 LLM 的輸入格式 |
-| **Document Loaders** | 文件載入工具 | 從 PDF、網頁、資料庫等載入並處理資料 |
-| **Retrieval** | 檢索模組 | 讓 LLM 從外部知識庫或文件中找到需要的資訊 |
-| **Memory** | 記憶模組 | 讓 LLM 能「記住」對話或上下文 |
-| **Chains** | 鏈式流程 | 將多個模組串連成有邏輯的工作流程 |
-| **Agents** | 智能代理 | 能根據需求自主決定要呼叫哪些工具或資料來源 |
-
-## 什麼是「抽象化」？
-
-### 概念解釋
-
-在軟體設計裡，**抽象化（Abstraction）**就是：
-> 隱藏細節，只保留最必要的特徵，讓使用者能更簡單地操作。
-
-- **沒有抽象化** → 你要自己處理一大堆雜事（例如直接呼叫 API，要管 Token、格式、回傳 JSON 等）
-- **有抽象化** → 框架幫你把雜事包好，給你一個乾淨的介面
-
-### 實際對比
-
-| 場景 | 沒有抽象化 | 有 LangChain 抽象化 |
-|------|------------|-------------------|
-| 使用不同 LLM | 要為每個 API 寫不同程式碼 | 統一介面，一行程式碼切換模型 |
-| 管理對話記憶 | 手動存取資料庫，拼接上下文 | 掛上 Memory 模組自動處理 |
-| 多步驟處理 | 自己設計流程控制邏輯 | 用 Chain 描述步驟即可 |
-
-## LangChain 包裝了哪些複雜功能？
-
-### 1. 🔌 LLM 介接統一化
-
-**原本複雜：** 不同廠牌的 LLM API 格式各異，Token、回傳格式、流式處理都不同。
-
-**LangChain 包裝：** 提供統一的介面，可無痛切換模型。
-
-```python
-from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
-
-# 換模型只換這行，其他程式不用改
-llm = ChatOpenAI(model="gpt-4")  
-# 或 llm = ChatAnthropic(model="claude-3-opus")
-
-response = llm.invoke("幫我寫一首詩")
-```
-
-### 2. 📝 Prompt 模板管理
-
-**原本複雜：** 要自己拼字串，把上下文、格式、變數全都寫死。
-
-**LangChain 包裝：** 提供 PromptTemplate，可以用變數填入。
-
-```python
-from langchain.prompts import PromptTemplate
-
-template = PromptTemplate.from_template(
-    "你是一位營養師，請根據這些數據 {health_data} 提供建議"
-)
-
-prompt = template.format(health_data="血糖偏高")
-```
-
-### 3. 🧠 Memory（對話記憶）
-
-**原本複雜：** LLM 天生無記憶，要自己管理對話歷史，存資料庫，再手動拼接。
-
-**LangChain 包裝：** 內建各種 Memory 類型，掛上就能記住上下文。
-
-```python
-from langchain.chains import ConversationChain
-from langchain.memory import ConversationBufferMemory
-
-memory = ConversationBufferMemory()
-conversation = ConversationChain(llm=llm, memory=memory)
-
-# 自動記住上下文
-conversation.invoke("我叫小明")
-conversation.invoke("我剛才說我叫什麼名字？")  # 會記得是小明
-```
-
-### 4. 🔍 Retrieval + 外部知識庫整合
-
-**原本複雜：** 要自己寫 embedding、存到向量資料庫、再寫檢索邏輯。
-
-**LangChain 包裝：** 提供 Retriever，一句話就能讓 LLM 接外部知識。
-
-```python
-from langchain.chains import RetrievalQA
-
-# 自動檢索相關文件並回答
-qa = RetrievalQA.from_chain_type(
-    llm=llm, 
-    retriever=vectorstore.as_retriever()
-)
-
-answer = qa.invoke("公司的請假政策是什麼？")
-```
-
-### 5. ⛓️ Chains（多步驟流程組裝）
-
-**原本複雜：** 要手動控制流程：先檢索資料 → 再問 LLM → 再格式化結果。
-
-**LangChain 包裝：** 把多步驟組裝成「流程鏈」。
-
-```python
-from langchain.chains import SequentialChain
-
-# 自動執行：分析 → 建議 → 格式化
-health_chain = SequentialChain(
-    chains=[analysis_chain, recommendation_chain, format_chain],
-    input_variables=["health_data"],
-    output_variables=["final_report"]
-)
-```
-
-### 6. 🎯 Agents（動態決策 & 工具調用）
-
-**原本複雜：** 要自己寫 if/else 判斷，決定何時該查 API、何時直接回覆。
-
-**LangChain 包裝：** LLM 自主決定該調用哪個工具。
-
-```python
-from langchain.agents import AgentExecutor
-
-# LLM 可根據問題決定：
-# - 查天氣 API
-# - 查資料庫  
-# - 或直接回答
-agent = AgentExecutor.from_agent_and_tools(
-    agent=agent,
-    tools=[weather_tool, database_tool]
-)
-```
-
-## 實際應用場景
-
-### 場景一：健康 AI 助手
-
-**沒有 LangChain 的複雜度：**
-- 手動串接 OpenAI API
-- 自己寫程式處理上下文
-- 自己實作 embedding + 存 Firestore  
-- 手寫 prompt 拼接邏輯
-- 設計複雜的 API workflow
-
-**使用 LangChain 的簡化：**
-- `ChatOpenAI` 抽象層處理 API
-- `ConversationBufferMemory` 處理對話
-- `RetrievalQA` 連接 BigQuery 或 Firestore
-- `PromptTemplate` 管理健康建議格式
-- `Agent` 讓 LLM 自動決定要「查詢數據」還是「直接建議」
-
-### 場景二：客服機器人
-
-```python
-# 完整的客服機器人，只需要組裝積木
-from langchain.chains import ConversationalRetrievalChain
-from langchain.memory import ConversationBufferMemory
-
-# 記憶 + 知識庫檢索 + 對話能力
-chatbot = ConversationalRetrievalChain.from_llm(
-    llm=llm,
-    retriever=company_docs.as_retriever(),
-    memory=ConversationBufferMemory(memory_key="chat_history")
-)
-
-# 就能處理複雜的多輪對話和知識問答
-response = chatbot({"question": "如何申請退貨？"})
-```
-
-## 白話理解
-
-**簡單來說**，LangChain 就像是一個「AI 應用程式開發框架」。
-
-它的目的不是讓你只單純問 LLM 問題，而是讓 LLM 可以：
-- 📖 讀外部資料
-- 🧠 記住上下文  
-- 🤔 決定行動
-- 🔗 和其他系統互動
-
-### 類比說明
-
-如果把 LangChain 想成 AI 界的「Spring Boot」或「Django」：
-
-- **Spring Boot** 抽象化：不用自己寫 Servlet、處理 Request/Response
-- **LangChain** 抽象化：不用自己處理 Prompt、API、Memory、知識庫檢索
-
-## LangChain 與 Prompt 工程的關係
-
-### 層級差異理解
-
-可以把關係理解成：
-
-**Prompt 工程**：是**微觀層級**的技巧，專注於「這個輸入」怎麼寫，才會讓模型給出最佳的輸出。就像是你跟模型的「一句話互動」。
-
-**LangChain**：是**宏觀層級**的框架，幫助你把多個 prompt、上下文、外部資料庫（像向量資料庫）、API 工具、記憶機制等，組織成完整流程。這樣就能把單一 prompt 技巧擴展成產品級應用。
-
-### LangChain 作為進階 Prompt 工程工具
-
-LangChain 可以歸類成「**進階 Prompt 工程工作流**」的核心工具，因為它提供了：
-
-| 功能模組 | Prompt 工程層面 | 實際應用 |
-|----------|----------------|----------|
-| **Model I/O** | 管理模型輸入輸出 | 統一化不同模型的 prompt 格式 |
-| **Retrieval** | 從外部文件取資料再丟進 Prompt | 動態注入相關內容到 prompt 中 |
-| **Chains** | 把多個 Prompt 串成流程 | 多步驟推理，層層遞進的 prompt 設計 |
-| **Agents** | 讓模型自己決定用什麼工具 | 智能選擇最適合的 prompt 策略 |
-| **Memory** | 保留上下文，支持長對話 | 讓 prompt 包含歷史對話記憶 |
-| **Callbacks** | 在生成過程中掛勾事件 | Token Streaming、進度追踪等 |
-
-### 簡單比喻
-
-**Prompt 工程**：像是「**一份食譜**」— 怎麼描述食材和步驟，才能煮出你要的菜。
-
-```python
-# 單一 Prompt 工程
-prompt = "請分析以下健康數據並給出建議：血糖 120 mg/dL"
-response = llm.invoke(prompt)
-```
-
-**LangChain**：像是「**一個廚房系統**」— 有冰箱（資料檢索）、計時器（回呼）、菜譜集合（Chain）、甚至可以派助手（Agent）去買菜。
-
-```python
-# LangChain 系統化流程
-from langchain.chains import SequentialChain
-from langchain.prompts import PromptTemplate
-
-# 多步驟 Prompt 工程
-analysis_prompt = PromptTemplate.from_template(
-    "分析健康數據：{health_data}"
-)
-recommendation_prompt = PromptTemplate.from_template(
-    "基於分析結果 {analysis} 提供具體建議"
-)
-format_prompt = PromptTemplate.from_template(
-    "將建議 {recommendations} 格式化為用戶友好的報告"
-)
-
-# 組織成完整工作流
-health_chain = SequentialChain(
-    chains=[analysis_chain, recommendation_chain, format_chain],
-    input_variables=["health_data"],
-    output_variables=["final_report"]
-)
-```
-
-### 互補關係總結
-
-| 層面 | Prompt 工程 | LangChain |
-|------|-------------|-----------|
-| **層級** | 微觀的「語言技巧」 | 宏觀的「系統框架」 |
-| **關注點** | 單一 prompt 的品質 | 整體流程的協調 |
-| **應用場景** | 一次性對話優化 | 可重用、可擴展的應用 |
-| **技能需求** | 語言表達、邏輯組織 | 系統設計、架構思考 |
-
-### 實際開發流程
-
-```mermaid
-graph LR
-    A[Prompt 工程<br/>設計單一提示詞] --> B[LangChain 整合<br/>組織多步驟流程]
-    B --> C[系統測試<br/>驗證整體效果]
-    C --> D[優化調整<br/>回頭改進 Prompt]
-    D --> A
-```
-
-**要總結的話：**
-- **Prompt 工程** = 微觀的「語言技巧」
-- **LangChain** = 宏觀的「系統框架」  
-- **兩者是互補關係**，LangChain 讓你把 Prompt 工程從一次性對話升級成可重用、可擴展的應用。
-
-## 總結
-
-LangChain 包裝的就是「LLM 開發的重複繁瑣工作」：
-
-- ✅ Prompt 管理與模板化
-- ✅ 記憶管理與上下文保留
-- ✅ 知識檢索與動態注入
-- ✅ 多步驟流程與邏輯編排
-- ✅ API/工具調用與智能決策
-- ✅ LLM 模型切換與統一接口
-
-讓你專注在**應用邏輯和 Prompt 設計**，而不是一直「重造輪子」。
-
 ---
 
 ::: tip 下一步
 現在你已經了解 LangChain 的基本概念，接下來可以：
-1. [環境設置](/tutorials/setup) - 準備開發環境
-2. [免費 LLM 模型指南](/tutorials/free-llm-models) - 了解免費模型選項
-3. [第一個應用](/tutorials/first-app) - 動手實作
+1. [LangChain 架構與核心概念](/tutorials/architecture) - 深入了解架構與抽象化
+2. [環境設置](/tutorials/setup) - 準備開發環境
+3. [免費 LLM 模型指南](/tutorials/free-llm-models) - 了解免費模型選項
+4. [第一個應用](/tutorials/first-app) - 動手實作
 :::
 
-::: warning 重要提醒
-LangChain 是一個快速發展的框架，API 可能會有變化。建議參考 [官方文檔](https://python.langchain.com/) 獲取最新資訊。
+::: warning 版本相容性提醒
+本文檔已更新至 **LangChain v0.2+ 標準**，但框架仍在快速發展中：
+
+- ✅ **已更新**：`create_retrieval_chain`、`create_react_agent`、LCEL 管道語法
+- ⚠️ **棄用中**：`RetrievalQA`、`initialize_agent`、`ConversationalRetrievalChain`
+- 🆕 **新特性**：LangGraph、更強的 Output Parsers、LangSmith 整合
+
+建議此順序查看最新資訊：
+1. [官方文檔](https://python.langchain.com/) - 最新 API 參考
+2. [LangGraph 文檔](https://langchain-ai.github.io/langgraph/) - 新一代 Agent 框架
+3. [LangSmith](https://smith.langchain.com/) - 可觀測性與調試工具
 :::
