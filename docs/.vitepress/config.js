@@ -30,6 +30,7 @@ export default withMermaid(
               { text: 'LangChain 架構與核心概念', link: '/tutorials/architecture' },
               { text: '環境設置', link: '/tutorials/setup' },
               { text: 'Chat Models 對話模型', link: '/tutorials/chat-models' },
+              { text: 'Prompt Template 提示詞模板', link: '/tutorials/prompt-template' },
               { text: 'Streaming Chat Models 串流對話模型', link: '/tutorials/streaming-chat-models' },
               { text: '批次請求與非同步函式', link: '/tutorials/multiple-llm-generations' },
               { text: '免費 LLM 模型指南', link: '/tutorials/free-llm-models' },
@@ -41,7 +42,7 @@ export default withMermaid(
             items: [
               { text: 'LCEL 表達式語言', link: '/tutorials/lcel' },
               { text: 'LangGraph 工作流框架', link: '/tutorials/langgraph' },
-              { text: '結構化輸出解析', link: '/tutorials/output-parsers' },
+              { text: 'LangChain Output Parsers 教學', link: '/tutorials/output-parsers' },
               { text: '記憶機制與對話管理', link: '/tutorials/memory-systems' },
               { text: '監控與可觀測性', link: '/tutorials/monitoring' }
             ]
