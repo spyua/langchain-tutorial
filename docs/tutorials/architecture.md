@@ -144,29 +144,36 @@ prompt = template.format(health_data="血糖偏高")
 **LangChain 包裝：** 內建各種 Memory 類型，掛上就能記住上下文。
 
 ```python
-# v0.2+ 新版對話記憶做法
+# v0.2+ 新版對話記憶做法（修正 placeholder 用法）
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
 
-# 簡單的對話鏈
 llm = ChatOpenAI(model="gpt-4o-mini")
+
+# MessagesPlaceholder 底層實作估計為字典，
+"""
+[
+  {"role": "user", "content": "我叫小明"},
+  {"role": "assistant", "content": "好的，小明，我記住了。"}
+]
+"""
 prompt = ChatPromptTemplate.from_messages([
     ("system", "你是一個有用的助手，能記住對話歷史。"),
-    ("placeholder", "{chat_history}"),
+    MessagesPlaceholder(variable_name="chat_history"),   # ← 正確寫法
     ("human", "{input}"),
 ])
+
 chain = prompt | llm
 
-# 記憶儲存
+# 簡易 In-Memory 記憶存放
 store = {}
 def get_session_history(session_id: str) -> ChatMessageHistory:
     if session_id not in store:
         store[session_id] = ChatMessageHistory()
     return store[session_id]
 
-# 帶記憶的對話
 conversation = RunnableWithMessageHistory(
     chain,
     get_session_history,
@@ -174,11 +181,11 @@ conversation = RunnableWithMessageHistory(
     history_messages_key="chat_history",
 )
 
-# 自動記住上下文
 config = {"configurable": {"session_id": "user123"}}
 conversation.invoke({"input": "我叫小明"}, config=config)
 result = conversation.invoke({"input": "我剛才說我叫什麼名字？"}, config=config)
-print(result.content)  # 會記得是小明
+print(result.content)
+
 ```
 
 ### 4. 🔍 Retrieval + 外部知識庫整合
