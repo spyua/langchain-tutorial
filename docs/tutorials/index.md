@@ -37,7 +37,16 @@
 - API 金鑰設定
 :::
 
-::: tip 4. 免費 LLM 模型指南
+::: tip 4. Chat Models 對話模型
+[開始學習 →](/tutorials/chat-models)
+
+理解現代 AI 對話模型的核心概念
+- SystemMessage/HumanMessage/AIMessage
+- 多輪對話與上下文管理
+- LangChain 0.3+ 最新功能
+:::
+
+::: tip 5. 免費 LLM 模型指南
 [開始學習 →](/tutorials/free-llm-models)
 
 學習使用免費的開源模型
@@ -46,7 +55,7 @@
 - 模型選擇與比較
 :::
 
-::: tip 5. 第一個應用
+::: tip 6. 第一個應用
 [開始學習 →](/tutorials/first-app)
 
 動手建構第一個 LangChain 應用程式
@@ -167,9 +176,11 @@ LangSmith 整合與生產監控
 
 ### 🔰 初學者路徑
 1. **LangChain 介紹** - 理解核心理念與應用場景
-2. **免費 LLM 模型指南** - 無成本開始實驗
-3. **第一個應用** - 動手實作
-4. **Demo 展示** - 體驗不同功能
+2. **環境設置** - 準備開發環境
+3. **Chat Models 對話模型** - 掌握現代 AI 對話基礎
+4. **免費 LLM 模型指南** - 無成本開始實驗
+5. **第一個應用** - 動手實作
+6. **Demo 展示** - 體驗不同功能
 
 ### 🎓 進階開發者路徑  
 1. **LangChain 架構與核心概念** - 深度理解框架設計

@@ -29,6 +29,7 @@ export default withMermaid(
               { text: 'LangChain 介紹', link: '/tutorials/introduction' },
               { text: 'LangChain 架構與核心概念', link: '/tutorials/architecture' },
               { text: '環境設置', link: '/tutorials/setup' },
+              { text: 'Chat Models 對話模型', link: '/tutorials/chat-models' },
               { text: '免費 LLM 模型指南', link: '/tutorials/free-llm-models' },
               { text: '第一個應用', link: '/tutorials/first-app' }
             ]
