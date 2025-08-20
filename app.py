@@ -66,7 +66,15 @@ elif section == "Demo 展示":
             "title": "01. Gemini 基礎聊天",
             "description": "使用 LangChain 整合 Google Gemini API 的基礎聊天應用",
             "path": "streamlit-demos/01_gemini_basic",
-            "features": ["API 連接測試", "多模型支援", "互動式聊天", "動態配置"]
+            "features": ["API 連接測試", "多模型支援", "互動式聊天", "動態配置"],
+            "script": "gemini_chat.py"
+        },
+        {
+            "title": "02. 免費模型展示",
+            "description": "體驗各種免費開源 LLM 模型，包括 Ollama 本地模型和 Hugging Face 託管模型",
+            "path": "streamlit-demos/02_free_models", 
+            "features": ["本地 Ollama 模型", "Hugging Face 模型", "性能比較", "模型切換"],
+            "script": "free_models_demo.py"
         }
     ]
     
@@ -84,8 +92,9 @@ elif section == "Demo 展示":
                 demo_path = Path(demo['path'])
                 if demo_path.exists():
                     st.success("✅ 可用")
+                    script_name = demo.get('script', 'app.py')
                     if st.button(f"🚀 執行 {demo['title']}", key=demo['title']):
-                        st.code(f"cd {demo['path']}\nstreamlit run gemini_chat.py", language="bash")
+                        st.code(f"cd {demo['path']}\nstreamlit run {script_name}", language="bash")
                     st.info("💡 在終端機執行上述命令來啟動 Demo")
                 else:
                     st.error("❌ 路徑不存在")

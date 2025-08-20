@@ -1,5 +1,10 @@
 streamlit
 langchain
 langchain-google-genai
+langchain-ollama
+langchain-huggingface
+langchain-core
 python-dotenv
 requests
+transformers
+torch
