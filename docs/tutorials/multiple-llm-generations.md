@@ -18,13 +18,28 @@
 ## 2️⃣ `.invoke()` vs `.batch()`
 
 * `.invoke()`：單一請求 → 單一回應。
-* `.batch()`：一次多請求 → 多個回應（支援並行）。
+* `.batch()`：一次多請求 → 多個回應（同步呼叫、內部平行 I/O，可由 `max_concurrency` 控制）。
 
 **範例：**
 
 ```python
+from copy import deepcopy
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.runnables.config import RunnableConfig
+
+chat = ChatOpenAI(model="gpt-4o-mini", temperature=0.7, max_retries=3)
+
+messages = [
+    SystemMessage(content="你是幽默但精準的助理"),
+    HumanMessage(content="講一個工程師的冷笑話")
+]
+
+# 建立彼此獨立的輸入（避免參考問題）
+inputs = [deepcopy(messages) for _ in range(2)]
+
 # 同步批次請求：一次生成兩個回應
-synchronous_llm_result = chat.batch([messages] * 2)
+synchronous_llm_result = chat.batch(inputs)
 print(synchronous_llm_result)
 ```
 
@@ -45,15 +60,23 @@ print(synchronous_llm_result)
 
 ```python
 from langchain_core.runnables.config import RunnableConfig
+from copy import deepcopy
 
-# 建立一個 RunnableConfig，設定最大並行數為 5
+# 建立彼此獨立的輸入
+inputs = [deepcopy(messages) for _ in range(2)]
+
+# 方法1：使用 RunnableConfig 類別
 config = RunnableConfig(max_concurrency=5)
+results = chat.batch(inputs, config=config)
 
-# 使用 batch() 方法，傳入多組訊息清單與設定
-results = chat.batch([messages, messages], config)
+# 方法2：使用字典寫法
+results = chat.batch(inputs, config={"max_concurrency": 5})
+
+# 方法3：使用 with_config 方法
+results = chat.with_config({"max_concurrency": 5}).batch(inputs)
 ```
 
-這樣可以避免 API 請求過多造成速率限制，也能提升處理效率。
+`max_concurrency` 預設值來自 ThreadPoolExecutor；可透過 dict 或 `RunnableConfig` 指定。這樣可以避免 API 請求過多造成速率限制，也能提升處理效率。
 
 ---
 
@@ -75,14 +98,73 @@ LangChain 的非同步函式命名規則很簡單：
 * `.invoke()` → `.ainvoke()`
 * `.batch()` → `.abatch()`
 
+**重要：** `.abatch()` 在協程中並行執行，但 **`.abatch()` 會在所有請求完成後一次回傳結果**；若要**先完成先回**請使用 `batch_as_completed()`。
+
 範例：
 
 ```python
-# 非同步批次請求
-results = await chat.abatch([messages] * 5)
+import asyncio
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage
+
+chat = ChatOpenAI(model="gpt-4o-mini", temperature=0.7, max_retries=3)
+
+async def main():
+    inputs = [[HumanMessage(content=f"變出第{i}個標題")] for i in range(5)]
+    # .abatch() 等全部完成後一次回傳結果
+    results = await chat.abatch(inputs, config={"max_concurrency": 5})
+    for r in results:
+        print(r.content)
+
+asyncio.run(main())
 ```
 
 這樣能讓多個 LLM 請求同時進行，特別適合**複雜工作流程**或**大量 API 呼叫**的情境。
+
+### 📌 容錯與重試機制
+
+批次/高並發應用中，容錯與重試機制非常重要：
+
+```python
+# 方法1：在模型層設定重試
+chat = ChatOpenAI(model="gpt-4o-mini", max_retries=3)
+
+# 方法2：使用 with_retry 方法
+robust_chat = chat.with_retry(stop_after_attempt=3)  # 指數退避預設開啟
+results = robust_chat.batch(inputs, {"max_concurrency": 5})
+
+# 方法3：批次處理中的例外收集
+results = chat.batch(inputs, config=config, return_exceptions=True)
+for r in results:
+    if isinstance(r, Exception):
+        print(f"呼叫失敗：{r}")
+    else:
+        print(r.content)
+```
+
+這會大幅降低 429/5xx 錯誤對批次處理的影響。
+
+### 📌 先完成先回：`batch_as_completed()`
+
+若需要**先完成先處理**，使用 `batch_as_completed()` 代替 `.abatch()`：
+
+```python
+from langchain_core.runnables import Runnable
+from copy import deepcopy
+
+# 建立多個獨立輸入
+inputs = [deepcopy(messages) for _ in range(5)]
+
+# 任何 Runnable 都支援 batch_as_completed
+for finished in chat.batch_as_completed(inputs, config={"max_concurrency": 5}):
+    try:
+        r = finished.result()  # 每個 Future 先完成先取
+        print(f"完成一個回應：{r.content[:50]}...")
+    except Exception as e:
+        print(f"失敗：{e}")
+```
+
+> **說明**：`.abatch()` **一次回整包**；`batch_as_completed()` 才能**逐一**處理先完成的結果。
 
 ---
 
@@ -104,7 +186,7 @@ sequenceDiagram
     rect rgb(200,255,200)
     Note over User,LLM: 非同步 `.ainvoke()` / `.abatch()`
     User->>LLM: 並行發送多個請求
-    LLM-->>User: 結果逐一返回（不需等待）
+    LLM-->>User: .abatch() 等全部完成後回傳；若要逐一處理，用 batch_as_completed()
     end
 ```
 
@@ -112,11 +194,28 @@ sequenceDiagram
 
 ## 6️⃣ 總結
 
-* 使用 **`.batch()`** → 一次產生多個回應，支援並行。
+* 使用 **`.batch()`** → 一次產生多個回應，同步呼叫、內部平行 I/O。
 * 使用 **`RunnableConfig`** → 控制最大並行數，避免 API 過載。
-* 使用 **非同步 API (`.abatch()` / `.ainvoke()`)** → 多請求同時處理，大幅降低延遲。
+* 使用 **非同步 API (`.abatch()` / `.ainvoke()`)** → 多請求同時處理，但 `.abatch()` 等全部完成後一次回傳。
+* 使用 **`batch_as_completed()`** → 需要先完成先處理時。
+* 使用 **`.with_retry()`** → 增強容錯能力，應對速率限制。
 
 👉 建議：
 
 * **小量請求** → `.batch()` 即可。
 * **大量請求／高併發場景** → `.abatch()` 搭配 `max_concurrency`。
+* **需要逐一處理結果** → `batch_as_completed()`。
+* **生產環境** → 加上 `.with_retry()` 和 `return_exceptions=True`。
+
+---
+
+## 📝 實務備註
+
+### 速率限制與流控
+* `max_concurrency` 只是限縮同時呼叫數，**不是**自動排隊器；搭配 `.with_retry()` 才能有效應對 429/5xx。
+
+### 觀測性
+* 可在 `RunnableConfig` 放 `tags`/`metadata` 方便追蹤。
+
+### 串流需求
+* 要 token 級串流顯示用 `.stream()`/`.astream()`；要多輸入並行且逐一接收，用 `batch_as_completed()`。
