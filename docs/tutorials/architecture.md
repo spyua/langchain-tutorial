@@ -233,7 +233,7 @@ def health_analysis_pipeline(health_data: str):
     return final_report
 
 # 使用範例
-result = health_analysis_pipeline("血糖 120 mg/dL, BMI 25.5, 運動量少")
+result = health_analysis_pipeline("血糖偏高 130mg/dL, BMI 25.5, 運動量少")
 print(result)
 ```
 
@@ -244,229 +244,98 @@ print(result)
 **LangChain 包裝：** LLM 自主決定該調用哪個工具。
 
 ```python
-from langchain.agents import AgentExecutor
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain.tools import Tool
+from langchain_core.prompts import ChatPromptTemplate
 
-# LLM 可根據問題決定：
-# - 查天氣 API
-# - 查資料庫  
-# - 或直接回答
-agent = AgentExecutor.from_agent_and_tools(
-    agent=agent,
-    tools=[weather_tool, database_tool]
-)
-```
+# 安全計算器（詳細實現請參考介紹章節）
+def safe_calculate(expression: str):
+    """安全的數學計算器，避免使用 eval()"""
+    # 實現安全的數學計算邏輯
+    return f"計算結果: {expression}"
 
-## 實際應用場景
+# 安全的工具集
+tools = [
+    Tool(name="安全計算", func=safe_calculate, description="安全的數學計算（只允許 +, -, *, /, ** 運算）")
+]
 
-### 場景一：健康 AI 助手
-
-**沒有 LangChain 的複雜度：**
-- 手動串接 OpenAI API
-- 自己寫程式處理上下文
-- 自己實作 embedding + 存 Firestore  
-- 手寫 prompt 拼接邏輯
-- 設計複雜的 API workflow
-
-**使用 LangChain 的簡化：**
-- `ChatOpenAI` 抽象層處理 API
-- `ConversationBufferMemory` 處理對話
-- `RetrievalQA` 連接 BigQuery 或 Firestore
-- `PromptTemplate` 管理健康建議格式
-- `Agent` 讓 LLM 自動決定要「查詢數據」還是「直接建議」
-
-### 場景二：客服機器人
-
-```python
-# 完整的客服機器人（v0.2+ 新版做法）
-from langchain.chains.retrieval import create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.chains.history_aware_retriever import create_history_aware_retriever
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables.history import RunnableWithMessageHistory
-from langchain_community.chat_message_histories import ChatMessageHistory
-
-# 建立歷史感知檢索器
-contextualize_q_system_prompt = """給定聊天歷史和最新的用戶問題，
-如果問題涵及聊天歷史，請重新表述一個獨立的問題。"""
-contextualize_q_prompt = ChatPromptTemplate.from_messages([
-    ("system", contextualize_q_system_prompt),
-    MessagesPlaceholder("chat_history"),
-    ("human", "{input}"),
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "你是一個有用的助手。使用提供的工具來完成任務。"),
+    ("user", "{input}"),
+    ("assistant", "{agent_scratchpad}"),
 ])
 
-# 歷史感知的檢索器
-history_aware_retriever = create_history_aware_retriever(
-    llm, company_docs.as_retriever(), contextualize_q_prompt
-)
+# LLM 能自主決定使用哪個工具
+agent = create_tool_calling_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
-# 問答提示詞
-qa_system_prompt = """你是一個問答助手。使用以下檢索到的上下文來回答問題。
-
-{context}"""
-qa_prompt = ChatPromptTemplate.from_messages([
-    ("system", qa_system_prompt),
-    MessagesPlaceholder("chat_history"),
-    ("human", "{input}"),
-])
-
-# 創建問答鏈
-question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
-rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
-
-# 記憶儲存
-store = {}
-
-def get_session_history(session_id: str) -> ChatMessageHistory:
-    if session_id not in store:
-        store[session_id] = ChatMessageHistory()
-    return store[session_id]
-
-# 帶記憶的對話鏈
-chatbot = RunnableWithMessageHistory(
-    rag_chain,
-    get_session_history,
-    input_messages_key="input",
-    history_messages_key="chat_history",
-    output_messages_key="answer",
-)
-
-# 處理多輪對話
-response = chatbot.invoke(
-    {"input": "如何申請退貨？"},
-    config={"configurable": {"session_id": "user_001"}}
-)
-print(response["answer"])
+# 複雜任務自主分解與執行
+response = agent_executor.invoke({
+    "input": "幫我計算 (100+50)*2 的結果"
+})
+print(response["output"])
 ```
 
-## 白話理解
+## 核心架構理念
 
-**簡單來說**，LangChain 就像是一個「AI 應用程式開發框架」。
+### 模組化設計
 
-它的目的不是讓你只單純問 LLM 問題，而是讓 LLM 可以：
-- 📖 讀外部資料
-- 🧠 記住上下文  
-- 🤔 決定行動
-- 🔗 和其他系統互動
+LangChain 採用模組化設計，每個組件都可以獨立使用或組合使用：
 
-### 類比說明
+- **可組合性**：不同模組可以靈活組合
+- **可擴展性**：容易添加新的模型和工具
+- **可替換性**：同類型的組件可以互相替換
 
-如果把 LangChain 想成 AI 界的「Spring Boot」或「Django」：
+### 統一的介面抽象
 
-- **Spring Boot** 抽象化：不用自己寫 Servlet、處理 Request/Response
-- **LangChain** 抽象化：不用自己處理 Prompt、API、Memory、知識庫檢索
+所有 LangChain 組件都實現統一的 `Runnable` 介面：
 
-## LangChain 與 Prompt 工程的關係
+- **invoke()**：同步執行
+- **ainvoke()**：異步執行  
+- **batch()**：批量處理
+- **stream()**：流式處理
 
-### 層級差異理解
+### 聲明式程式設計
 
-可以把關係理解成：
-
-**Prompt 工程**：是**微觀層級**的技巧，專注於「這個輸入」怎麼寫，才會讓模型給出最佳的輸出。就像是你跟模型的「一句話互動」。
-
-**LangChain**：是**宏觀層級**的框架，幫助你把多個 prompt、上下文、外部資料庫（像向量資料庫）、API 工具、記憶機制等，組織成完整流程。這樣就能把單一 prompt 技巧擴展成產品級應用。
-
-### LangChain 作為進階 Prompt 工程工具
-
-LangChain 可以歸類成「**進階 Prompt 工程工作流**」的核心工具，因為它提供了：
-
-| 功能模組 | Prompt 工程層面 | 實際應用 |
-|----------|----------------|----------|
-| **Model I/O** | 管理模型輸入輸出 | 統一化不同模型的 prompt 格式 |
-| **Retrieval** | 從外部文件取資料再丟進 Prompt | 動態注入相關內容到 prompt 中 |
-| **Chains** | 把多個 Prompt 串成流程 | 多步驟推理，層層遞進的 prompt 設計 |
-| **Agents** | 讓模型自己決定用什麼工具 | 智能選擇最適合的 prompt 策略 |
-| **Memory** | 保留上下文，支持長對話 | 讓 prompt 包含歷史對話記憶 |
-| **Callbacks** | 在生成過程中掛勾事件 | Token Streaming、進度追踪等 |
-
-### 簡單比喻
-
-**Prompt 工程**：像是「**一份食譜**」— 怎麼描述食材和步驟，才能煮出你要的菜。
+v0.2+ 的 LCEL 語法讓開發者可以用聲明式的方式描述資料流：
 
 ```python
-# 單一 Prompt 工程
-prompt = "請分析以下健康數據並給出建議：血糖 120 mg/dL"
-response = llm.invoke(prompt)
+# 聲明式的資料流描述
+chain = prompt | llm | output_parser
+
+# 等效於命令式的寫法
+def imperative_chain(input_data):
+    prompt_result = prompt.format(**input_data)
+    llm_result = llm.invoke(prompt_result)
+    final_result = output_parser.parse(llm_result)
+    return final_result
 ```
-
-**LangChain**：像是「**一個廚房系統**」— 有冰箱（資料檢索）、計時器（回呼）、菜譜集合（Chain）、甚至可以派助手（Agent）去買菜。
-
-```python
-# LangChain 系統化流程
-from langchain.chains import SequentialChain
-from langchain.prompts import PromptTemplate
-
-# 新版 LCEL 管道語法範例：更簡潔的多步驟流程
-from langchain_core.runnables import RunnablePassthrough
-
-# 直接用 | 操作符串接多步驟
-analysis_prompt = PromptTemplate.from_template("分析健康數據：{health_data}")
-recommendation_prompt = PromptTemplate.from_template("基於分析 {analysis} 提供建議")
-format_prompt = PromptTemplate.from_template("格式化建議 {recommendation} 為報告")
-
-# LCEL 管道：自動傳遞中間結果
-health_pipeline = (
-    {"health_data": RunnablePassthrough()}
-    | analysis_prompt
-    | llm
-    | {"analysis": StrOutputParser()}
-    | recommendation_prompt
-    | llm 
-    | {"recommendation": StrOutputParser()}
-    | format_prompt
-    | llm
-    | StrOutputParser()
-)
-
-# 使用範例
-result = health_pipeline.invoke("血糖偏高 130mg/dL")
-print(result)
-```
-
-### 互補關係總結
-
-| 層面 | Prompt 工程 | LangChain |
-|------|-------------|-----------|
-| **層級** | 微觀的「語言技巧」 | 宏觀的「系統框架」 |
-| **關注點** | 單一 prompt 的品質 | 整體流程的協調 |
-| **應用場景** | 一次性對話優化 | 可重用、可擴展的應用 |
-| **技能需求** | 語言表達、邏輯組織 | 系統設計、架構思考 |
-
-### 實際開發流程
-
-```mermaid
-graph LR
-    A[Prompt 工程<br/>設計單一提示詞] --> B[LangChain 整合<br/>組織多步驟流程]
-    B --> C[系統測試<br/>驗證整體效果]
-    C --> D[優化調整<br/>回頭改進 Prompt]
-    D --> A
-```
-
-**要總結的話：**
-- **Prompt 工程** = 微觀的「語言技巧」
-- **LangChain** = 宏觀的「系統框架」  
-- **兩者是互補關係**，LangChain 讓你把 Prompt 工程從一次性對話升級成可重用、可擴展的應用。
 
 ## 總結
 
 LangChain 包裝的就是「LLM 開發的重複繁瑣工作」：
 
-- ✅ **LCEL 管道語法** - 組合式資料流處理
-- ✅ **對話記憶機制** - 持久化與多會話支援
-- ✅ **檢索增強生成** - 新版 RAG 流程
-- ✅ **結構化輸出** - Pydantic 模型驗證
-- ✅ **安全工具調用** - 輸入驗證與權限控制
-- ✅ **可觀測性** - LangSmith 整合追蹤
-- ✅ **模組化架構** - 独立整合包設計
+- ✅ **統一的模型介面** - 一套程式碼支援多種 LLM
+- ✅ **智慧記憶管理** - 自動處理對話上下文
+- ✅ **檢索增強生成** - 簡化外部知識整合
+- ✅ **結構化輸出** - 可靠的資料格式轉換
+- ✅ **工具調用框架** - 讓 LLM 能夠執行動作
+- ✅ **可觀測性支援** - 內建監控和除錯功能
+- ✅ **模組化設計** - 靈活組合各種功能
 
 讓你專注在**應用邏輯和 Prompt 設計**，而不是一直「重造輪子」。
 
 ---
 
-::: tip 下一步
-現在你已經了解 LangChain 的架構與核心概念，接下來可以：
-1. [環境設置](/tutorials/setup) - 準備開發環境
-2. [免費 LLM 模型指南](/tutorials/free-llm-models) - 了解免費模型選項
-3. [第一個應用](/tutorials/first-app) - 動手實作
+::: tip 深入學習
+現在你已經了解 LangChain 的架構與核心概念，接下來可以深入學習各個專門主題：
+
+- [LCEL 表達式語言](/tutorials/lcel) - 學習管道語法和組合模式
+- [LangGraph 工作流](/tutorials/langgraph) - 掌握多代理協作框架  
+- [結構化輸出解析](/tutorials/output-parsers) - 實現可靠的資料轉換
+- [記憶機制與對話管理](/tutorials/memory-systems) - 建構智慧對話系統
+- [監控與可觀測性](/tutorials/monitoring) - 生產環境最佳實踐
 :::
 
 ::: warning 版本相容性提醒

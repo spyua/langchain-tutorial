@@ -34,11 +34,21 @@ export default withMermaid(
             ]
           },
           {
+            text: '核心技術',
+            items: [
+              { text: 'LCEL 表達式語言', link: '/tutorials/lcel' },
+              { text: 'LangGraph 工作流框架', link: '/tutorials/langgraph' },
+              { text: '結構化輸出解析', link: '/tutorials/output-parsers' },
+              { text: '記憶機制與對話管理', link: '/tutorials/memory-systems' },
+              { text: '監控與可觀測性', link: '/tutorials/monitoring' }
+            ]
+          },
+          {
             text: '進階教學',
             items: [
               { text: '模型整合', link: '/tutorials/model-integration' },
-              { text: '記憶系統', link: '/tutorials/memory' },
-              { text: 'RAG 應用', link: '/tutorials/rag' }
+              { text: 'RAG 應用', link: '/tutorials/rag' },
+              { text: '進階應用案例', link: '/tutorials/advanced-examples' }
             ]
           }
         ],
