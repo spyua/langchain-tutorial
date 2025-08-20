@@ -6,6 +6,7 @@ export default withMermaid(
     title: 'LangChain 教學網站',
     description: '學習如何使用 LangChain 建構 AI 應用程式',
     lang: 'zh-TW',
+    base: '/langchain-tutorial/',
     
     // Mermaid 配置
     mermaid: {
