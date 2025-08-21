@@ -44,6 +44,8 @@ langchain-core>=0.1.0
 requests>=2.31.0
 ```
 
+> **提示**: 若安裝失敗，請改用 `langchain-community` 並參考最新版 LangChain 文件。
+
 ### Ollama 設定 (選用)
 
 如果想要體驗本地模型，需要安裝 Ollama：
@@ -60,18 +62,23 @@ curl -fsSL https://ollama.com/install.sh | sh
 
 ```bash
 # 輕量級模型 (約 4GB)
-ollama pull llama3.1:8b
+ollama pull llama3.1:8b-instruct
 
 # 中等模型 (約 8GB) 
 ollama pull mistral:7b
 
 # 程式碼專用模型
 ollama pull codellama:7b
+
+# 檢查可用的 tag
+ollama list
 ```
 
 ### Hugging Face API Token (選用)
 
 註冊 [Hugging Face](https://huggingface.co) 並創建 API Token 可以獲得更高的使用限制。
+
+> **注意**: 免費 Token 雖能提高可用量，但仍有速率與流量上限（約每日 30 次 / 模型），需考慮升級方案或改用 Inference Endpoints。
 
 ## 🎮 使用指南
 
@@ -129,6 +136,7 @@ HUGGINGFACEHUB_API_TOKEN=your_token_here
 
 # Ollama 服務設定
 OLLAMA_HOST=http://localhost:11434
+# 注意: OLLAMA_TIMEOUT 需在程式碼或應用框架中支援，並非 Ollama 內建變數
 OLLAMA_TIMEOUT=60
 ```
 
@@ -156,7 +164,7 @@ ollama serve
 **Q: 模型下載失敗**
 ```bash
 # 檢查網路連接後重試
-ollama pull llama3.1:8b
+ollama pull llama3.1:8b-instruct
 
 # 或嘗試其他來源
 ollama pull llama3.1:8b-instruct-q4_0
@@ -189,6 +197,8 @@ ollama pull llama3.1:8b-instruct-q4_0
 | 13B 模型 | 16GB | 32GB | 1-2 分鐘 |
 | 34B 模型 | 32GB | 64GB | 2-5 分鐘 |
 
+> **硬體建議**: 建議搭配 GPU 使用，CPU-only 環境雖可運行，但推理速度會極慢。
+
 ### 回應時間參考
 
 | 模型類型 | 平均回應時間 | 影響因素 |
@@ -215,6 +225,4 @@ ollama pull llama3.1:8b-instruct-q4_0
 
 ---
 
-::: tip 提示
-這個 demo 是了解不同免費模型特性的絕佳起點。建議先從較小的模型開始實驗，再根據需求選擇更大的模型。
-:::
+> 💡 **提示**: 這個 demo 是了解不同免費模型特性的絕佳起點。建議先從較小的模型開始實驗，再根據需求選擇更大的模型。
