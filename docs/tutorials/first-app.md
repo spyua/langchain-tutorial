@@ -240,19 +240,46 @@ watch -n 2 "du -sh ~/.ollama/models/"
 創建 `test_ollama.py` 來測試連接：
 
 ```python
+# 匯入 LangChain 的 Ollama LLM 包裝器
 from langchain_ollama import OllamaLLM
 
 def test_ollama_connection():
+    """測試 Ollama 服務連接的函數
+    
+    這個函數用來驗證：
+    1. Ollama 服務是否正常運行
+    2. 指定的模型是否可用  
+    3. LangChain 是否能正確調用模型
+    
+    Returns:
+        bool: 連接成功返回 True，失敗返回 False
+    """
     try:
+        # 初始化 Ollama LLM 實例
+        # model="llama3.2:1b" 指定要使用的模型名稱和版本
         llm = OllamaLLM(model="llama3.2:1b")
+        
+        # 發送測試請求到模型
+        # invoke() 是 LangChain 的標準調用方法，支援所有 LLM 類型
         response = llm.invoke("Hello, 請用繁體中文回答：你是誰？")
+        
+        # 顯示成功訊息
         print("✅ Ollama 連接成功！")
         print(f"回應：{response}")
+        
         return True
+        
     except Exception as e:
+        # 捕獲所有可能的錯誤（網路、模型、服務等）
         print(f"❌ Ollama 連接失敗：{e}")
+        print("🔧 請檢查：")
+        print("  1. Ollama 服務是否已啟動 (ollama serve)")
+        print("  2. llama3.2:1b 模型是否已下載 (ollama list)")
+        print("  3. 網路連接是否正常")
+        
         return False
 
+# 直接執行此檔案時運行測試
 if __name__ == "__main__":
     test_ollama_connection()
 ```
@@ -267,16 +294,46 @@ python test_ollama.py
 讓我們從最簡單的 LLM 調用開始：
 
 ```python
-# basic_llm.py
+# basic_llm.py - 基礎 LLM 調用範例
 from langchain_ollama import OllamaLLM
 
 def basic_llm_example():
-    # 初始化 Ollama LLM
-    llm = OllamaLLM(model="llama3.2:1b")
+    """最基本的 LLM 使用方式
     
-    # 簡單調用
-    response = llm.invoke("請用繁體中文解釋什麼是人工智慧")
+    這個範例展示：
+    1. 如何初始化 Ollama LLM
+    2. 如何發送請求並獲取回應
+    3. 最簡單的 AI 應用架構
+    """
+    print("🚀 基礎 LLM 調用範例")
+    print("=" * 30)
+    
+    # 步驟 1: 初始化 Ollama LLM 實例
+    # 這裡指定使用 llama3.2:1b 模型（1.3GB，適合學習）
+    llm = OllamaLLM(model="llama3.2:1b")
+    print("✅ LLM 初始化完成")
+    
+    # 步驟 2: 準備提示文字
+    # 直接使用字串作為提示，沒有使用模板
+    prompt = "請用繁體中文解釋什麼是人工智慧"
+    print(f"📝 發送提示: {prompt}")
+    
+    # 步驟 3: 調用模型獲取回應
+    # invoke() 方法會：
+    # 1. 將提示發送到 Ollama 服務
+    # 2. 等待模型生成回應
+    # 3. 返回生成的文字
+    print("⏳ 模型思考中...")
+    response = llm.invoke(prompt)
+    
+    # 步驟 4: 顯示結果
+    print("\n🤖 AI 回應:")
+    print("-" * 40)
     print(response)
+    print("-" * 40)
+    
+    # 註：這個範例沒有使用 LangChain 的進階功能
+    # 如 Prompt Templates、Chains 等，只是最基本的調用
 
 if __name__ == "__main__":
     basic_llm_example()
@@ -289,15 +346,29 @@ if __name__ == "__main__":
 現在讓我們使用 LangChain 的 Prompt Template 來增加彈性：
 
 ```python
-# prompt_template_example.py
+# prompt_template_example.py - Prompt Template 範例
 from langchain_ollama import OllamaLLM
 from langchain_core.prompts import PromptTemplate
 
 def prompt_template_example():
-    # 初始化 LLM
-    llm = OllamaLLM(model="llama3.2:1b")
+    """使用 Prompt Template 的進階範例
     
-    # 創建 Prompt Template
+    這個範例展示：
+    1. 如何創建可重複使用的提示模板
+    2. 如何使用變數來動態生成提示
+    3. Prompt Template 與直接字串的差異
+    4. 為什麼模板化提示更靈活
+    """
+    print("🎨 Prompt Template 範例")
+    print("=" * 40)
+    
+    # 步驟 1: 初始化 LLM
+    llm = OllamaLLM(model="llama3.2:1b")
+    print("✅ LLM 初始化完成")
+    
+    # 步驟 2: 創建 Prompt Template
+    # 使用 {變數名} 語法定義可替換的部分
+    # 這使得同一個模板可以用於不同的角色和任務
     template = PromptTemplate.from_template(
         """你是一個{role}。請{task}：
 
@@ -306,22 +377,54 @@ def prompt_template_example():
 請用繁體中文回答，並且{style}。"""
     )
     
-    # 使用模板生成 prompt
+    print("📋 模板變數:")
+    print(f"  可用變數: {template.input_variables}")
+    
+    # 步驟 3: 使用模板生成具體的 prompt
+    # format() 方法會將變數替換為實際值
     prompt = template.format(
-        role="Python 程式設計老師",
-        task="用簡單易懂的方式解釋",
-        question="什麼是函數？",
-        style="包含實際的程式碼範例"
+        role="Python 程式設計老師",      # 定義 AI 的角色
+        task="用簡單易懂的方式解釋",       # 指定任務類型
+        question="什麼是函數？",          # 具體問題
+        style="包含實際的程式碼範例"       # 回答風格要求
     )
     
-    print("📝 生成的 Prompt：")
+    # 步驟 4: 顯示生成的完整 prompt
+    print("\n📝 生成的完整 Prompt：")
+    print("-" * 50)
     print(prompt)
-    print("\n" + "="*50 + "\n")
+    print("-" * 50)
     
-    # 調用 LLM
+    # 步驟 5: 調用 LLM 獲取回應
+    print("\n⏳ 模型思考中...")
     response = llm.invoke(prompt)
-    print("🤖 AI 回應：")
+    
+    print("\n🤖 AI 回應：")
+    print("-" * 50)
     print(response)
+    print("-" * 50)
+    
+    # 展示模板的可重複使用性
+    print("\n🔄 展示模板重複使用 - 切換角色")
+    print("=" * 40)
+    
+    # 使用相同模板，不同參數
+    different_prompt = template.format(
+        role="歷史學家",
+        task="詳細分析",
+        question="秦朝統一的影響",
+        style="舉出具體的歷史事件"
+    )
+    
+    print("📝 新的 Prompt:")
+    print(different_prompt[:100] + "...")
+    
+    # 模板的優勢說明
+    print("\n💡 Prompt Template 的優勢:")
+    print("  1. 可重複使用 - 同一模板適用不同場景")
+    print("  2. 易於維護 - 集中管理提示格式")
+    print("  3. 動態生成 - 根據輸入調整內容")
+    print("  4. 類型安全 - LangChain 會驗證必要變數")
 
 if __name__ == "__main__":
     prompt_template_example()
@@ -332,15 +435,28 @@ if __name__ == "__main__":
 這是 LangChain 的核心威力 - 將組件鏈接起來：
 
 ```python
-# langchain_chain_example.py
+# langchain_chain_example.py - LangChain 鏈範例
 from langchain_ollama import OllamaLLM
 from langchain_core.prompts import PromptTemplate
 
 def langchain_chain_example():
-    # 初始化組件
-    llm = OllamaLLM(model="llama3.2:1b")
+    """LangChain 鏈的核心概念演示
     
-    # 創建 Prompt Template
+    這個範例展示：
+    1. 什麼是 LangChain 鏈（Chain）
+    2. 如何使用管道操作符 | 連接組件  
+    3. 鏈與手動步驟的差異
+    4. 鏈的優勢和威力
+    """
+    print("⛓️ LangChain 鏈範例")
+    print("=" * 40)
+    
+    # 步驟 1: 初始化組件
+    print("🔧 初始化組件...")
+    llm = OllamaLLM(model="llama3.2:1b")
+    print("  ✅ LLM 初始化完成")
+    
+    # 步驟 2: 創建 Prompt Template  
     template = PromptTemplate.from_template(
         """你是一個{role}。請{task}：
 
@@ -348,20 +464,61 @@ def langchain_chain_example():
 
 請用繁體中文回答，並且{style}。"""
     )
+    print("  ✅ Prompt Template 創建完成")
     
-    # 🔗 建構 LangChain 鏈
+    # 步驟 3: 🔗 建構 LangChain 鏈
+    # 管道操作符 | 將模板和 LLM 連接起來
+    # 這是 LangChain Expression Language (LCEL) 的語法
     chain = template | llm
+    print("  ✅ 鏈建構完成 (Template → LLM)")
     
-    # 使用鏈
-    response = chain.invoke({
+    print("\n💡 鏈的工作流程:")
+    print("  1. 接收輸入參數（字典格式）")
+    print("  2. Template 將參數格式化為 prompt")
+    print("  3. LLM 處理 prompt 並生成回應")
+    print("  4. 返回最終結果")
+    
+    # 步驟 4: 使用鏈處理請求
+    # invoke() 方法會自動執行整個鏈的流程
+    print("\n🚀 執行鏈...")
+    
+    input_data = {
         "role": "歷史老師",
-        "task": "詳細說明",
+        "task": "詳細說明", 
         "question": "秦始皇統一中國的重要性",
         "style": "舉出具體的歷史事件和影響"
-    })
+    }
     
-    print("🔗 使用 LangChain 鏈的回應：")
+    print(f"📥 輸入數據: {input_data}")
+    print("⏳ 鏈處理中...")
+    
+    # 一次調用完成整個流程
+    response = chain.invoke(input_data)
+    
+    # 步驟 5: 顯示結果
+    print("\n🔗 使用 LangChain 鏈的回應：")
+    print("-" * 50)
     print(response)
+    print("-" * 50)
+    
+    # 對比手動流程
+    print("\n🆚 對比：鏈 vs 手動流程")
+    print("=" * 40)
+    
+    print("手動流程（步驟二的方式）:")
+    print("  1. template.format(**input_data)")
+    print("  2. llm.invoke(formatted_prompt)")
+    print("  3. 處理結果")
+    print()
+    print("鏈式流程（推薦）:")
+    print("  1. chain.invoke(input_data)  # 一步完成！")
+    
+    print("\n✨ 鏈的優勢:")
+    print("  • 簡化代碼 - 減少重複的模板格式化步驟")
+    print("  • 可組合 - 可以將多個鏈串聯起來")  
+    print("  • 標準化 - 統一的調用接口")
+    print("  • 可擴展 - 容易添加新的處理步驟")
+    print("  • 類型安全 - 自動驗證輸入和輸出")
 
 if __name__ == "__main__":
     langchain_chain_example()
@@ -372,20 +529,51 @@ if __name__ == "__main__":
 現在讓我們建構完整的應用程式：
 
 ```python
-# smart_assistant.py
+# smart_assistant.py - 完整的智能角色問答助手
 from langchain_ollama import OllamaLLM
 from langchain_core.prompts import PromptTemplate
 from typing import Dict, Any
 import time
 
 class SmartAssistant:
+    """智能角色問答助手
+    
+    這個類別整合了前面學到的所有概念：
+    1. LLM 模型管理
+    2. Prompt Template 模板系統
+    3. LangChain 鏈組合
+    4. 多角色支援
+    5. 錯誤處理和性能監控
+    """
+    
     def __init__(self, model_name: str = "llama3.2:1b"):
-        """初始化智能助手"""
+        """初始化智能助手
+        
+        Args:
+            model_name (str): 要使用的 Ollama 模型名稱
+        """
+        print(f"🤖 正在初始化智能助手（模型：{model_name}）")
+        
+        # 儲存模型名稱以供後續使用
+        self.model_name = model_name
+        
+        # 初始化 Ollama LLM 實例
         self.llm = OllamaLLM(model=model_name)
+        print("  ✅ LLM 初始化完成")
+        
+        # 設置模板和鏈
         self.setup_templates()
+        print("  ✅ 角色模板設置完成")
         
     def setup_templates(self):
-        """設置不同角色的模板"""
+        """設置不同角色的 Prompt Templates 和對應的 Chains
+        
+        這個方法：
+        1. 定義各種角色的專業提示模板
+        2. 為每個角色建立 Template → LLM 的鏈
+        3. 儲存在字典中供後續使用
+        """
+        print("🎭 設置角色模板...")
         self.templates = {
             "程式老師": PromptTemplate.from_template(
                 """你是一個經驗豐富的程式設計老師。請用清楚易懂的方式回答學生的程式問題。
@@ -446,7 +634,22 @@ class SmartAssistant:
         return list(self.templates.keys())
     
     def ask(self, role: str, question: str) -> Dict[str, Any]:
-        """向指定角色提問"""
+        """向指定角色提問的核心方法
+        
+        這個方法整合了完整的問答流程：
+        1. 驗證角色是否存在
+        2. 調用對應的 LangChain 鏈
+        3. 計算性能指標
+        4. 處理錯誤並返回結構化結果
+        
+        Args:
+            role (str): 要諮詢的角色名稱
+            question (str): 要詢問的問題
+            
+        Returns:
+            Dict[str, Any]: 包含回應和元數據的字典
+        """
+        # 步驟 1: 輸入驗證 - 檢查角色是否存在
         if role not in self.chains:
             return {
                 "success": False,
@@ -454,51 +657,78 @@ class SmartAssistant:
             }
         
         try:
-            # 記錄開始時間
+            print(f"  🎯 正在調用 {role} 角色...")
+            
+            # 步驟 2: 記錄開始時間（性能監控）
             start_time = time.time()
             
-            # 調用對應的鏈
+            # 步驟 3: 調用對應的 LangChain 鏈
+            # self.chains[role] 是 PromptTemplate | LLM 的組合
+            # invoke() 會自動：
+            #   a) 將 question 填入模板
+            #   b) 將格式化的 prompt 發送給 LLM
+            #   c) 返回 LLM 的回應
             response = self.chains[role].invoke({"question": question})
             
-            # 計算回應時間
+            # 步驟 4: 計算回應時間
             response_time = time.time() - start_time
+            print(f"  ⏱️  回應時間: {response_time:.2f}秒")
             
+            # 步驟 5: 返回結構化的成功結果
             return {
-                "success": True,
-                "role": role,
-                "question": question,
-                "response": response,
-                "response_time": f"{response_time:.2f}秒"
+                "success": True,           # 操作成功標記
+                "role": role,             # 使用的角色
+                "question": question,     # 原始問題
+                "response": response,     # AI 的回應
+                "response_time": f"{response_time:.2f}秒"  # 性能指標
             }
             
         except Exception as e:
+            # 步驟 6: 錯誤處理
+            print(f"  ❌ 發生錯誤: {str(e)}")
             return {
                 "success": False,
                 "error": f"發生錯誤：{str(e)}"
             }
 
 def main():
-    """主程式"""
+    """主程式 - 智能角色問答助手的控制台介面
+    
+    這個函數實現：
+    1. 助手初始化和錯誤處理
+    2. 用戶介面和指令解析
+    3. 主要的對話循環
+    4. 特殊指令處理（quit, roles 等）
+    """
     print("🎭 智能角色問答助手")
     print("=" * 40)
     
-    # 初始化助手
+    # 步驟 1: 初始化助手（含錯誤處理）
     try:
+        print("⏳ 正在初始化助手...")
         assistant = SmartAssistant()
         print("✅ 助手初始化成功！")
     except Exception as e:
         print(f"❌ 初始化失敗：{e}")
-        return
+        print("\n🔧 請檢查：")
+        print("1. Ollama 服務是否已啟動")
+        print("2. llama3.2:1b 模型是否已下載")
+        print("3. 網路連接是否正常")
+        return  # 初始化失敗則退出程式
     
-    # 顯示可用角色
+    # 步驟 2: 顯示系統資訊
     roles = assistant.get_available_roles()
     print(f"\n📋 可用角色：{', '.join(roles)}")
+    print(f"🤖 使用模型：{assistant.model_name}")
     
+    # 步驟 3: 顯示使用說明
     print("\n💡 使用說明：")
     print("- 輸入 'quit' 結束程式")
     print("- 輸入 'roles' 查看可用角色")
     print("- 格式：[角色] 您的問題")
     print("- 範例：程式老師 什麼是遞迴？")
+    print("- 範例：翻譯員 Hello World")
+    print("- 範例：生活顧問 如何管理時間？")
     
     while True:
         print("\n" + "-" * 40)
@@ -840,40 +1070,197 @@ if __name__ == "__main__":
 
 ## 🌐 步驟六：Streamlit Web 介面
 
-讓我們為助手建立一個友善的 Web 介面：
+讓我們為助手建立一個友善的 Web 介面。這個版本將 SmartAssistant 類別直接包含在 Streamlit 檔案中，避免模組依賴問題：
+
+::: tip 重要提醒
+這個 Streamlit 版本是獨立的，不需要先創建 `enhanced_assistant.py` 檔案。所有必要的程式碼都包含在 `streamlit_assistant.py` 中。
+:::
 
 ```python
-# streamlit_assistant.py
+# streamlit_assistant.py - Streamlit Web 介面版本
 import streamlit as st
-from enhanced_assistant import EnhancedSmartAssistant
+from langchain_ollama import OllamaLLM
+from langchain_core.prompts import PromptTemplate
+from typing import Dict, Any
 import time
 import logging
 
-# 設置頁面
+# 🔧 架構說明：為避免模組依賴問題，直接在此檔案中定義 SmartAssistant 類別
+# 這使得此檔案完全獨立，可以直接運行而不需要其他檔案
+
+class SmartAssistant:
+    """智能助手類別 - Streamlit 版本
+    
+    這是與命令列版本相同的核心邏輯，但：
+    1. 移除了 print 輸出（由 Streamlit UI 接管）
+    2. 簡化了錯誤處理（適合 Web 環境）
+    3. 保持了完整的 LangChain 功能
+    """
+    def __init__(self, model_name: str = "llama3.2:1b"):
+        """初始化智能助手"""
+        self.model_name = model_name
+        self.llm = OllamaLLM(model=model_name)
+        self.setup_templates()
+        
+    def setup_templates(self):
+        """設置不同角色的模板"""
+        self.templates = {
+            "程式老師": PromptTemplate.from_template(
+                """你是一個經驗豐富的程式設計老師。請用清楚易懂的方式回答學生的程式問題。
+
+問題：{question}
+
+請用繁體中文回答，並且：
+1. 先解釋概念
+2. 提供實際的程式碼範例
+3. 指出常見的錯誤或注意事項
+4. 建議進一步學習的方向"""
+            ),
+            
+            "翻譯員": PromptTemplate.from_template(
+                """你是一個專業的翻譯員。請協助翻譯以下內容。
+
+要翻譯的內容：{question}
+
+請提供：
+1. 準確的翻譯
+2. 文意說明（如果需要）
+3. 使用情境（如果是俚語或專業術語）"""
+            ),
+            
+            "生活顧問": PromptTemplate.from_template(
+                """你是一個溫暖體貼的生活顧問。請針對使用者的生活問題提供建議。
+
+問題：{question}
+
+請用繁體中文回答，並且：
+1. 表達同理心
+2. 提供實用的建議
+3. 分享相關的經驗或知識
+4. 給予正面的鼓勵"""
+            )
+        }
+        
+        # 建構鏈
+        self.chains = {
+            role: template | self.llm 
+            for role, template in self.templates.items()
+        }
+    
+    def get_available_roles(self) -> list:
+        """取得可用角色列表"""
+        return list(self.templates.keys())
+    
+    def ask(self, role: str, question: str) -> Dict[str, Any]:
+        """向指定角色提問"""
+        if role not in self.chains:
+            return {
+                "success": False,
+                "error": f"角色 '{role}' 不存在。可用角色：{', '.join(self.get_available_roles())}"
+            }
+        
+        # 輸入驗證
+        if not question.strip():
+            return {
+                "success": False,
+                "error": "問題不能為空"
+            }
+        
+        if len(question) > 1000:
+            return {
+                "success": False,
+                "error": "問題過長，請控制在1000字以內"
+            }
+        
+        try:
+            # 記錄開始時間
+            start_time = time.time()
+            
+            # 調用對應的鏈
+            response = self.chains[role].invoke({"question": question.strip()})
+            
+            # 計算回應時間
+            response_time = time.time() - start_time
+            
+            return {
+                "success": True,
+                "role": role,
+                "question": question,
+                "response": response.strip() if response else "回應為空",
+                "response_time": f"{response_time:.2f}秒",
+                "model": self.model_name
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"發生錯誤：{str(e)}"
+            }
+    
+    def health_check(self) -> Dict[str, Any]:
+        """健康檢查"""
+        try:
+            start_time = time.time()
+            test_response = self.llm.invoke("Hello")
+            response_time = time.time() - start_time
+            
+            return {
+                "status": "healthy",
+                "model": self.model_name,
+                "response_time": f"{response_time:.2f}秒",
+                "available_roles": len(self.chains)
+            }
+        except Exception as e:
+            return {
+                "status": "unhealthy",
+                "error": str(e)
+            }
+
+# === Streamlit 應用程式配置 ===
+# 設置頁面基本資訊和佈局
 st.set_page_config(
-    page_title="智能角色問答助手",
-    page_icon="🎭",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title="智能角色問答助手",    # 瀏覽器標題
+    page_icon="🎭",                # 瀏覽器圖示
+    layout="wide",                 # 寬版佈局，更好利用螢幕空間
+    initial_sidebar_state="expanded"  # 側邊欄預設展開
 )
 
-# 初始化 session state
+# === Streamlit Session State 初始化 ===
+# Session State 用於在不同的 Streamlit 頁面刷新間保持數據
+# 這是 Streamlit 的狀態管理機制
+
 if 'assistant' not in st.session_state:
+    # 儲存助手實例，避免每次刷新都重新初始化
     st.session_state.assistant = None
+
 if 'chat_history' not in st.session_state:
+    # 儲存對話歷史，實現持久化對話記錄
     st.session_state.chat_history = []
+
 if 'current_role' not in st.session_state:
+    # 儲存當前選擇的角色，保持用戶選擇
     st.session_state.current_role = "程式老師"
 
 def initialize_assistant():
-    """初始化助手"""
+    """初始化助手的輔助函數
+    
+    這個函數：
+    1. 在 Streamlit 中安全地初始化 SmartAssistant
+    2. 顯示載入狀態
+    3. 處理初始化錯誤並提供用戶指導
+    
+    Returns:
+        SmartAssistant 或 None: 成功返回助手實例，失敗返回 None
+    """
     try:
+        # 使用 Streamlit 的 spinner 顯示載入狀態
         with st.spinner('正在初始化助手...'):
-            assistant = EnhancedSmartAssistant()
+            assistant = SmartAssistant()
             return assistant
     except Exception as e:
+        # 使用 Streamlit 的錯誤和資訊元件顯示友善的錯誤訊息
         st.error(f"初始化失敗：{e}")
-        st.info("請確認：\n1. Ollama 已安裝並啟動\n2. 已下載 llama3.1 模型\n3. 網路連接正常")
+        st.info("請確認：\n1. Ollama 已安裝並啟動\n2. 已下載 llama3.2:1b 模型\n3. 網路連接正常")
         return None
 
 def main():
@@ -1061,7 +1448,7 @@ def main():
             ### 必要條件
             - ✅ Python 3.8+
             - ✅ 已安裝 Ollama
-            - ✅ 已下載 llama3.1 模型
+            - ✅ 已下載 llama3.2:1b 模型
             - ✅ 已安裝必要的 Python 套件
             
             ### 安裝指令
@@ -1084,14 +1471,24 @@ if __name__ == "__main__":
     main()
 ```
 
-啟動 Streamlit 應用：
+### 🚀 啟動 Streamlit 應用
 
+**方法一：直接運行（推薦）**
 ```bash
 # 確保在虛擬環境中
 source venv/bin/activate  # Linux/macOS
 # 或 venv\Scripts\activate  # Windows
 
-# 啟動 Streamlit 應用
+# 直接啟動 Streamlit 應用（不需要其他檔案）
+streamlit run streamlit_assistant.py
+```
+
+**方法二：如果您已完成前面步驟**
+```bash
+# 如果您已經創建了 enhanced_assistant.py，也可以選擇先運行：
+# python enhanced_assistant.py  # 測試命令列版本
+
+# 然後啟動 Web 版本
 streamlit run streamlit_assistant.py
 ```
 
@@ -1190,8 +1587,8 @@ my-first-langchain-app/
 ├── prompt_template_example.py  # Prompt Template 範例
 ├── langchain_chain_example.py  # LangChain 鏈範例
 ├── smart_assistant.py      # 完整助手應用（命令列版）
-├── enhanced_assistant.py   # 增強版助手（命令列版）
-├── streamlit_assistant.py  # Streamlit Web 介面版本
+├── enhanced_assistant.py   # 增強版助手（命令列版，選用）
+├── streamlit_assistant.py  # Streamlit Web 介面版本（獨立運行）
 ├── test_assistant.py       # 測試檔案
 ├── test_ollama.py         # Ollama 連接測試
 ├── assistant.log          # 應用日誌

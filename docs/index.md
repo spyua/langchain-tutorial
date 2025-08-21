@@ -13,9 +13,9 @@
 
 ## 🚀 快速開始
 - [📚 教學課程](/tutorials/) - 19個詳細教學，從基礎到進階
-  - 基礎：介紹、設置、第一個應用、聊天模型
-  - 進階：記憶系統、RAG、LangGraph、監控
-  - 實戰：多模型整合、串流、架構模式
+  - 基礎：介紹、設置、免費模型、第一個應用、聊天模型、提示範本
+  - 核心技術：輸出解析器、LCEL、串流、批次請求、記憶系統、模型整合
+  - 進階應用：架構設計、RAG、LangGraph、監控、企業案例
 - [💼 實用範例](/examples/) - 真實應用場景示範
 - [🎮 互動 Demo](/demos/) - Streamlit 實作體驗
 
@@ -53,7 +53,7 @@
 
 ### 初學者路徑 (2-3週)
 1. **📖 基礎概念** - [LangChain 介紹](/tutorials/introduction) → [環境設置](/tutorials/setup)
-2. **🔧 核心功能** - [第一個應用](/tutorials/first-app) → [聊天模型](/tutorials/chat-models) → [提示範本](/tutorials/prompt-template)
+2. **🔧 核心功能** - [免費模型指南](/tutorials/free-llm-models) → [第一個應用](/tutorials/first-app) → [聊天模型](/tutorials/chat-models) → [提示範本](/tutorials/prompt-template)
 3. **🎮 實作練習** - 體驗 [免費模型 Demo](/demos/free-models)
 
 ### 進階開發路徑 (4-6週)

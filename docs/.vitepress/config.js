@@ -24,35 +24,36 @@ export default withMermaid(
       sidebar: {
         '/tutorials/': [
           {
-            text: '基礎教學',
+            text: '📚 基礎教學',
             items: [
               { text: 'LangChain 介紹', link: '/tutorials/introduction' },
-              { text: 'LangChain 架構與核心概念', link: '/tutorials/architecture' },
               { text: '環境設置', link: '/tutorials/setup' },
+              { text: '免費 LLM 模型指南', link: '/tutorials/free-llm-models' },
+              { text: '第一個應用', link: '/tutorials/first-app' },
               { text: 'Chat Models 對話模型', link: '/tutorials/chat-models' },
-              { text: 'Prompt Template 提示詞模板', link: '/tutorials/prompt-template' },
+              { text: 'Prompt Template 提示範本', link: '/tutorials/prompt-template' }
+            ]
+          },
+          {
+            text: '⚡ 核心技術',
+            items: [
+              { text: '結構化輸出解析', link: '/tutorials/output-parsers' },
+              { text: 'LCEL 表達式語言', link: '/tutorials/lcel' },
               { text: 'Streaming Chat Models 串流對話模型', link: '/tutorials/streaming-chat-models' },
               { text: '批次請求與非同步函式', link: '/tutorials/multiple-llm-generations' },
-              { text: '免費 LLM 模型指南', link: '/tutorials/free-llm-models' },
-              { text: '第一個應用', link: '/tutorials/first-app' }
+              { text: '記憶系統 📝', link: '/tutorials/memory' },
+              { text: '記憶機制與對話管理 📝', link: '/tutorials/memory-systems' },
+              { text: '模型整合 📝', link: '/tutorials/model-integration' }
             ]
           },
           {
-            text: '核心技術',
+            text: '🚀 進階應用',
             items: [
-              { text: 'LCEL 表達式語言', link: '/tutorials/lcel' },
-              { text: 'LangGraph 工作流框架', link: '/tutorials/langgraph' },
-              { text: 'LangChain Output Parsers 教學', link: '/tutorials/output-parsers' },
-              { text: '記憶機制與對話管理', link: '/tutorials/memory-systems' },
-              { text: '監控與可觀測性', link: '/tutorials/monitoring' }
-            ]
-          },
-          {
-            text: '進階教學',
-            items: [
-              { text: '模型整合', link: '/tutorials/model-integration' },
-              { text: 'RAG 應用', link: '/tutorials/rag' },
-              { text: '進階應用案例', link: '/tutorials/advanced-examples' }
+              { text: 'LangChain 架構與核心概念', link: '/tutorials/architecture' },
+              { text: 'RAG 應用 📝', link: '/tutorials/rag' },
+              { text: 'LangGraph 工作流框架 📝', link: '/tutorials/langgraph' },
+              { text: '監控與可觀測性 📝', link: '/tutorials/monitoring' },
+              { text: '進階應用案例 📝', link: '/tutorials/advanced-examples' }
             ]
           }
         ],
