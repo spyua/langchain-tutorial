@@ -344,7 +344,10 @@ ollama serve
 ### 3. 下載推薦模型
 
 ```bash
-# 輕量級模型 (約 4GB)
+# 輕量級模型 (約 1.3GB) - 推薦教學使用
+ollama pull llama3.2:1b
+
+# 中等模型 (約 4GB)
 ollama pull llama3.1:8b
 
 # 程式碼專用模型
@@ -357,8 +360,8 @@ ollama pull mistral:7b
 ### 4. 測試模型
 
 ```bash
-# 測試對話
-ollama run llama3.1:8b
+# 測試對話 - 使用輕量級模型
+ollama run llama3.2:1b
 
 # 在聊天中輸入
 >>> 你好，請介紹一下自己
@@ -565,11 +568,11 @@ python -m venv langchain-env
 
 **問題**: 本地模型記憶體不足
 ```bash
-# 使用量化模型
-ollama pull llama3.1:8b-instruct-q4_0
+# 使用更小的模型（推薦）
+ollama pull llama3.2:1b
 
-# 或選擇更小的模型
-ollama pull llama3.1:8b
+# 或使用量化模型
+ollama pull llama3.1:8b-instruct-q4_0
 ```
 
 ## 📚 下一步

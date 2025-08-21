@@ -41,8 +41,8 @@ curl -fsSL https://ollama.com/install.sh | sh
 ### 下載和運行模型
 
 ```bash
-# 下載並運行 Llama 3.1 8B
-ollama run llama3.1
+# 下載並運行 Llama 3.2 1B（推薦教學使用）
+ollama run llama3.2:1b
 
 # 下載並運行 Mistral 7B
 ollama run mistral
@@ -51,7 +51,7 @@ ollama run mistral
 ollama list
 
 # 移除不需要的模型
-ollama rm llama3.1
+ollama rm llama3.2:1b
 ```
 
 ## Hugging Face 模型
@@ -92,7 +92,7 @@ pip install langchain-ollama
 # 基本使用
 from langchain_ollama import OllamaLLM
 
-llm = OllamaLLM(model="llama3.1")
+llm = OllamaLLM(model="llama3.2:1b")  # 推薦教學使用
 response = llm.invoke("解釋什麼是機器學習")
 print(response)
 ```
@@ -222,11 +222,14 @@ OLLAMA_HOST=http://localhost:11434
 使用量化版本減少記憶體使用：
 
 ```bash
-# Ollama 自動選擇適合的量化版本
+# 使用輕量級模型（推薦）
+ollama run llama3.2:1b
+
+# 或使用量化版本
 ollama run llama3.1:8b-instruct-q4_0
 
-# 查看可用的量化版本
-ollama show llama3.1
+# 查看可用的模型版本
+ollama show llama3.2:1b
 ```
 
 ## 故障排除
@@ -235,8 +238,11 @@ ollama show llama3.1
 
 **1. 記憶體不足**
 ```python
-# 使用較小的模型
-llm = OllamaLLM(model="llama3.1:8b")  # 而非 70b
+# 使用輕量級模型（推薦）
+llm = OllamaLLM(model="llama3.2:1b")
+
+# 或使用中等模型
+llm = OllamaLLM(model="llama3.1:8b")
 
 # 或使用量化版本
 llm = OllamaLLM(model="llama3.1:8b-instruct-q4_0")

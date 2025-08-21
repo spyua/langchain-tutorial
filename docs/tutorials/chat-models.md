@@ -376,7 +376,7 @@ claude_chat = ChatAnthropic(
 )
 
 # 本地模型（Ollama）- 支援工具呼叫和 system prompts
-local_chat = ChatOllama(model="llama3.1:8b")  # 更新的模型版本
+local_chat = ChatOllama(model="llama3.2:1b")  # 推薦教學使用
 ```
 
 ### 4. 錯誤處理與重試機制
@@ -656,7 +656,7 @@ def create_universal_chat_model(model_provider: str):
         return ChatAnthropic(model="claude-3-sonnet-20240229")  # 現已完全支援
     
     elif model_provider == "local":
-        return ChatOllama(model="llama3.1:8b")  # 新版本支援 SystemMessage
+        return ChatOllama(model="llama3.2:1b")  # 推薦教學使用，支援 SystemMessage
     
     else:
         raise ValueError(f"不支援的模型提供商: {model_provider}")
