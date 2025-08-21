@@ -12,20 +12,12 @@
 - 掌握最佳實踐方法
 
 ## 🚀 快速開始
-
-### 1. 基礎學習路徑
-```mermaid
-graph LR
-    A[LangChain 介紹] --> B[環境設置]
-    B --> C[第一個應用]
-    C --> D[模型整合]
-    D --> E[進階功能]
-```
-
-### 2. 實作體驗
-- [📚 教學課程](/tutorials/) - 循序漸進的學習內容
-- [💼 實用範例](/examples/) - 真實應用場景
-- [🎮 Demo 展示](/demos/) - 互動式體驗
+- [📚 教學課程](/tutorials/) - 19個詳細教學，從基礎到進階
+  - 基礎：介紹、設置、第一個應用、聊天模型
+  - 進階：記憶系統、RAG、LangGraph、監控
+  - 實戰：多模型整合、串流、架構模式
+- [💼 實用範例](/examples/) - 真實應用場景示範
+- [🎮 互動 Demo](/demos/) - Streamlit 實作體驗
 
 ## 🔧 技術特色
 
@@ -59,11 +51,15 @@ graph LR
 
 ## 🎯 建議學習順序
 
-1. **📖 閱讀基礎教學** - 了解 LangChain 核心概念
-2. **🔧 設置開發環境** - 安裝必要套件與配置
-3. **🎮 體驗互動 Demo** - 透過實際操作了解功能
-4. **💼 研究實用範例** - 學習真實應用場景
-5. **🚀 建構自己的應用** - 將所學應用到實際專案
+### 初學者路徑 (2-3週)
+1. **📖 基礎概念** - [LangChain 介紹](/tutorials/introduction) → [環境設置](/tutorials/setup)
+2. **🔧 核心功能** - [第一個應用](/tutorials/first-app) → [聊天模型](/tutorials/chat-models) → [提示範本](/tutorials/prompt-template)
+3. **🎮 實作練習** - 體驗 [免費模型 Demo](/demos/free-models)
+
+### 進階開發路徑 (4-6週)
+4. **⚡ 進階特性** - [輸出解析器](/tutorials/output-parsers) → [LCEL](/tutorials/lcel) → [記憶系統](/tutorials/memory)
+5. **🚀 實際應用** - [RAG 應用](/tutorials/rag) → [多模型整合](/tutorials/multiple-llm-generations)
+6. **🏗️ 架構設計** - [LangGraph](/tutorials/langgraph) → [架構模式](/tutorials/architecture) → [監控](/tutorials/monitoring)
 
 ---
 
